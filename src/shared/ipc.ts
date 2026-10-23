@@ -27,7 +27,8 @@ export const AppInfoSchema = z.object({
   name: z.string(),
   version: z.string(),
   platform: z.string(),
-  osBuild: z.number().int().nonnegative()
+  osBuild: z.number().int().nonnegative(),
+  homeDir: z.string().min(1)
 })
 export type AppInfo = z.infer<typeof AppInfoSchema>
 

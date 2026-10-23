@@ -1,8 +1,10 @@
 import { useCallback } from 'react'
 import type { AgentId } from '@shared/agents'
-import { useProjectPicker } from './use-project-picker'
+import { getAppInfo } from '../lib/app-info'
 import { useProjectStore } from '../state/project-store'
 import { useTerminalStore } from '../state/terminal-store'
+import { useUiStore } from '../state/ui-store'
+import { strings } from '../strings'
 
 export interface LaunchRequest {
   agentId?: AgentId
@@ -10,18 +12,16 @@ export interface LaunchRequest {
 }
 
 export function useLaunch(): (request?: LaunchRequest) => Promise<void> {
-  const pickProject = useProjectPicker()
-
-  return useCallback(
-    async (request = {}) => {
-      let cwd = useProjectStore.getState().projectPath
-      if (!cwd) {
-        await pickProject()
-        cwd = useProjectStore.getState().projectPath
+  return useCallback(async (request = {}) => {
+    let cwd = useProjectStore.getState().projectPath
+    if (!cwd) {
+      try {
+        cwd = (await getAppInfo()).homeDir
+      } catch {
+        useUiStore.getState().pushToast('error', strings.terminal.launchFailed)
+        return
       }
-      if (!cwd) return
-      await useTerminalStore.getState().launch({ cwd, ...request })
-    },
-    [pickProject]
-  )
+    }
+    await useTerminalStore.getState().launch({ cwd, ...request })
+  }, [])
 }

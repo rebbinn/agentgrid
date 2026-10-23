@@ -22,8 +22,8 @@ export const strings = {
     noRecent: 'Hələ başqa layihə açılmayıb.'
   },
   empty: {
-    noProjectTitle: 'Başlamaq üçün layihə qovluğunu seçin',
-    noProjectText: 'Terminallar seçdiyiniz qovluqda açılacaq.',
+    noProjectText:
+      'Layihə seçilməyib, terminallar ev qovluğunuzda açılacaq. İstəsəniz layihə qovluğunu seçin.',
     noTerminalsTitle: 'Hələ terminal yoxdur',
     noTerminalsText: 'Solda Claude düyməsinə basanda yeni CMD açılıb içində Claude işə düşəcək.',
     pickProject: 'Layihə qovluğu seç',

@@ -57,7 +57,8 @@ export function registerIpc(
       name: app.getName(),
       version: app.getVersion(),
       platform: process.platform,
-      osBuild: windowsBuildNumber()
+      osBuild: windowsBuildNumber(),
+      homeDir: app.getPath('home')
     }
   })
 

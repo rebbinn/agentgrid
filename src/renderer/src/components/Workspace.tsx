@@ -22,39 +22,31 @@ export function Workspace() {
 
   return (
     <main className="workspace workspace--empty">
-      {projectPath ? (
-        <div className="empty-state">
-          <Icon name="terminal" size={32} />
-          <h1 className="empty-state__title">{strings.empty.noTerminalsTitle}</h1>
-          <p className="empty-state__text">{strings.empty.noTerminalsText}</p>
-          <div className="empty-state__actions">
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={() => void launch({ agentId: 'claude' })}
-            >
-              <Icon name="spark" />
-              {strings.empty.startClaude}
-            </button>
-            <button type="button" className="btn" onClick={() => void launch()}>
-              <Icon name="terminal" />
-              {strings.empty.plainTerminal}
-            </button>
-          </div>
+      <div className="empty-state">
+        <Icon name="terminal" size={32} />
+        <h1 className="empty-state__title">{strings.empty.noTerminalsTitle}</h1>
+        <p className="empty-state__text">
+          {projectPath ? strings.empty.noTerminalsText : strings.empty.noProjectText}
+        </p>
+        <div className="empty-state__actions">
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => void launch({ agentId: 'claude' })}
+          >
+            <Icon name="spark" />
+            {strings.empty.startClaude}
+          </button>
+          <button type="button" className="btn" onClick={() => void launch()}>
+            <Icon name="terminal" />
+            {strings.empty.plainTerminal}
+          </button>
+          <button type="button" className="btn btn--ghost" onClick={() => void pickProject()}>
+            <Icon name="folder" />
+            {strings.empty.pickProject}
+          </button>
         </div>
-      ) : (
-        <div className="empty-state">
-          <Icon name="folder" size={32} />
-          <h1 className="empty-state__title">{strings.empty.noProjectTitle}</h1>
-          <p className="empty-state__text">{strings.empty.noProjectText}</p>
-          <div className="empty-state__actions">
-            <button type="button" className="btn btn--primary" onClick={() => void pickProject()}>
-              <Icon name="folder" />
-              {strings.empty.pickProject}
-            </button>
-          </div>
-        </div>
-      )}
+      </div>
     </main>
   )
 }

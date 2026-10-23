@@ -13,7 +13,13 @@ export function createAgentGridMock() {
     app: {
       info: vi
         .fn()
-        .mockResolvedValue({ name: 'AgentGrid', version: '0.1.0', platform: 'win32', osBuild: 26200 })
+        .mockResolvedValue({
+          name: 'AgentGrid',
+          version: '0.1.0',
+          platform: 'win32',
+          osBuild: 26200,
+          homeDir: 'C:\\Users\\me'
+        })
     },
     project: { pick: vi.fn() },
     shell: { list: vi.fn().mockResolvedValue([CMD_SHELL, POWERSHELL_SHELL]) },

@@ -307,6 +307,19 @@ describe('buildChildEnv', () => {
     expect(env['PATH']).toBe('x')
   })
 
+  it('does not pass on the markers of the Claude Code session that happened to launch AgentGrid', () => {
+    const env = buildChildEnv({
+      CLAUDECODE: '1',
+      CLAUDE_CODE_CHILD_SESSION: '1',
+      claude_code_entrypoint: 'cli',
+      CLAUDE_CODE_USE_BEDROCK: '1',
+      PATH: 'x'
+    })
+    expect(Object.keys(env).sort()).toEqual(
+      ['CLAUDE_CODE_USE_BEDROCK', 'COLORTERM', 'PATH', 'TERM_PROGRAM'].sort()
+    )
+  })
+
   it('marks the terminal as AgentGrid with colour support and drops undefined values', () => {
     const env = buildChildEnv({ A: undefined, B: 'b' })
     expect(env).toMatchObject({ B: 'b', TERM_PROGRAM: 'AgentGrid', COLORTERM: 'truecolor' })

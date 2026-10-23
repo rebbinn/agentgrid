@@ -48,11 +48,15 @@ interface TerminalEntry {
   paused: boolean
 }
 
+const PARENT_SESSION_MARKERS = new Set(['CLAUDECODE', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_ENTRYPOINT'])
+
 export function buildChildEnv(base: NodeJS.ProcessEnv): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries(base)) {
     if (value === undefined) continue
-    if (key.toUpperCase().startsWith('ELECTRON_')) continue
+    const upperKey = key.toUpperCase()
+    if (upperKey.startsWith('ELECTRON_')) continue
+    if (PARENT_SESSION_MARKERS.has(upperKey)) continue
     env[key] = value
   }
   env['TERM_PROGRAM'] = 'AgentGrid'

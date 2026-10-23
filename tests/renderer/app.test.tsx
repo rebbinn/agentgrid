@@ -31,9 +31,11 @@ beforeEach(() => {
 })
 
 describe('first launch and project selection', () => {
-  it('asks for a project folder on first launch', () => {
+  it('offers Claude straight away on first launch and explains where terminals open', () => {
     render(<App />)
-    expect(screen.getByRole('heading', { name: /layihə qovluğunu seçin/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /hələ terminal yoxdur/i })).toBeTruthy()
+    expect(screen.getByText(/ev qovluğunuzda açılacaq/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /claude başlat/i })).toBeTruthy()
   })
 
   it('opens the picked folder and then offers to start Claude', async () => {
@@ -101,23 +103,29 @@ describe('the Claude button', () => {
     expect(new Set(ids).size).toBe(2)
   })
 
-  it('asks for a project folder first when none is selected, then continues', async () => {
-    api.project.pick.mockImplementation(async () => ({ path: 'C:\\work\\late' }))
+  it('starts Claude in the home folder without asking anything when no project is selected', async () => {
     render(<App />)
     fireEvent.click(claudeButton())
     await waitFor(() => expect(api.terminal.create).toHaveBeenCalledTimes(1))
     expect(api.terminal.create).toHaveBeenCalledWith(
-      expect.objectContaining({ cwd: 'C:\\work\\late', agentId: 'claude' })
+      expect.objectContaining({ cwd: 'C:\\Users\\me', agentId: 'claude' })
     )
+    expect(api.project.pick).not.toHaveBeenCalled()
   })
 
-  it('opens nothing when the folder dialog is cancelled', async () => {
-    api.project.pick.mockResolvedValue({ path: null })
+  it('starts Claude from the empty-state button the same way', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /claude başlat/i }))
+    await waitFor(() => expect(api.terminal.create).toHaveBeenCalledTimes(1))
+    expect(api.terminal.create.mock.calls[0]![0]).toMatchObject({ cwd: 'C:\\Users\\me', agentId: 'claude' })
+  })
+
+  it('reports an error instead of failing silently when the home folder cannot be read', async () => {
+    api.app.info.mockRejectedValue(new Error('ipc down'))
     render(<App />)
     fireEvent.click(claudeButton())
-    await waitFor(() => expect(api.project.pick).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByText(/terminal açmaq alınmadı/i)).toBeTruthy())
     expect(api.terminal.create).not.toHaveBeenCalled()
-    expect(useTerminalStore.getState().panes).toHaveLength(0)
   })
 })
 

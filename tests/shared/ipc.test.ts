@@ -17,14 +17,20 @@ const validCreate = { id: ID, shellId: 'cmd', cwd: 'C:\\work', cols: 120, rows: 
 
 describe('IPC schemas', () => {
   it('accepts a valid app info payload', () => {
-    const info = { name: 'AgentGrid', version: '0.1.0', platform: 'win32', osBuild: 26200 }
+    const info = {
+      name: 'AgentGrid',
+      version: '0.1.0',
+      platform: 'win32',
+      osBuild: 26200,
+      homeDir: 'C:\\Users\\me'
+    }
     expect(AppInfoSchema.parse(info)).toEqual(info)
   })
 
-  it('rejects an app info payload with a wrong type', () => {
-    expect(() =>
-      AppInfoSchema.parse({ name: 'AgentGrid', version: 1, platform: 'win32', osBuild: 1 })
-    ).toThrow()
+  it('rejects an app info payload with a wrong type or an empty home folder', () => {
+    const info = { name: 'AgentGrid', version: '0.1.0', platform: 'win32', osBuild: 1, homeDir: 'C:\\x' }
+    expect(() => AppInfoSchema.parse({ ...info, version: 1 })).toThrow()
+    expect(() => AppInfoSchema.parse({ ...info, homeDir: '' })).toThrow()
   })
 
   it('accepts a null or string project path and rejects anything else', () => {
