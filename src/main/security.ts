@@ -28,6 +28,15 @@ export const DEV_CONTENT_SECURITY_POLICY = [
   "form-action 'none'"
 ].join('; ')
 
+export function isOpenableExternalUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || url.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
 export interface TrustedEntry {
   devServerUrl: string | undefined
   fileUrl: string

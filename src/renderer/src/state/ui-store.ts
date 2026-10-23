@@ -11,6 +11,9 @@ export interface Toast {
 interface UiState {
   sidebarOpen: boolean
   toasts: Toast[]
+  pendingCloseId: string | null
+  askToClose: (id: string) => void
+  cancelClose: () => void
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   pushToast: (kind: ToastKind, message: string) => number
@@ -22,6 +25,9 @@ let nextToastId = 1
 export const useUiStore = create<UiState>((set) => ({
   sidebarOpen: true,
   toasts: [],
+  pendingCloseId: null,
+  askToClose: (id) => set({ pendingCloseId: id }),
+  cancelClose: () => set({ pendingCloseId: null }),
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   pushToast: (kind, message) => {

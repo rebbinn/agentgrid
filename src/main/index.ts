@@ -1,6 +1,9 @@
+import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, session, shell } from 'electron'
+import { spawn as spawnPty } from 'node-pty'
+import { findOnPath } from './executables'
 import { registerIpc } from './ipc'
 import {
   CONTENT_SECURITY_POLICY,
@@ -8,6 +11,9 @@ import {
   isTrustedUrl,
   type TrustedEntry
 } from './security'
+import { createShellDiscoveryDeps, discoverShells, type ShellDefinition } from './shells'
+import { TerminalService } from './terminal-service'
+import { IpcChannel } from '@shared/ipc'
 
 app.setName('AgentGrid')
 
@@ -18,6 +24,42 @@ const trustedEntry: TrustedEntry = {
 }
 
 let mainWindow: BrowserWindow | null = null
+
+const discoveryDeps = createShellDiscoveryDeps()
+let shellsPromise: Promise<ShellDefinition[]> | null = null
+
+function getShells(): Promise<ShellDefinition[]> {
+  shellsPromise ??= discoverShells(discoveryDeps)
+  return shellsPromise
+}
+
+function sendToWindow(channel: string, payload: unknown): void {
+  const contents = mainWindow?.webContents
+  if (contents && !contents.isDestroyed()) contents.send(channel, payload)
+}
+
+const terminals = new TerminalService({
+  spawn: (file, args, options) =>
+    spawnPty(file, args, {
+      name: 'xterm-256color',
+      cols: options.cols,
+      rows: options.rows,
+      cwd: options.cwd,
+      env: options.env
+    }),
+  getShells,
+  isDirectory: (path) => {
+    try {
+      return statSync(path).isDirectory()
+    } catch {
+      return false
+    }
+  },
+  findExecutable: (name) => findOnPath(name, discoveryDeps),
+  baseEnv: process.env,
+  emitData: (event) => sendToWindow(IpcChannel.terminalData, event),
+  emitExit: (event) => sendToWindow(IpcChannel.terminalExit, event)
+})
 
 function installSecurityPolicies(): void {
   const csp = devServerUrl ? DEV_CONTENT_SECURITY_POLICY : CONTENT_SECURITY_POLICY
@@ -65,7 +107,12 @@ function createWindow(): void {
     if (!isTrustedUrl(url, trustedEntry)) event.preventDefault()
   })
 
+  window.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) terminals.killAll()
+  })
+
   window.on('closed', () => {
+    terminals.killAll()
     mainWindow = null
   })
 
@@ -92,12 +139,17 @@ if (!hasLock) {
   app.whenReady().then(() => {
     app.setAppUserModelId('az.agentgrid.app')
     installSecurityPolicies()
-    registerIpc(() => mainWindow, trustedEntry)
+    registerIpc(() => mainWindow, trustedEntry, { terminals, getShells })
+    void getShells()
     createWindow()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })
+  })
+
+  app.on('before-quit', () => {
+    terminals.killAll()
   })
 
   app.on('window-all-closed', () => {

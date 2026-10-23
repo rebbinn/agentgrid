@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { isTrustedSender, isTrustedUrl, CONTENT_SECURITY_POLICY } from '../../src/main/security'
+import {
+  CONTENT_SECURITY_POLICY,
+  isOpenableExternalUrl,
+  isTrustedSender,
+  isTrustedUrl
+} from '../../src/main/security'
+
+describe('isOpenableExternalUrl', () => {
+  it('allows only http and https links to be handed to the operating system', () => {
+    expect(isOpenableExternalUrl('https://example.com/page')).toBe(true)
+    expect(isOpenableExternalUrl('http://localhost:3000')).toBe(true)
+  })
+
+  it.each(['file:///C:/Windows/System32/cmd.exe', 'javascript:alert(1)', 'ms-msdt:/id', 'not a url', ''])(
+    'blocks %s',
+    (value) => {
+      expect(isOpenableExternalUrl(value)).toBe(false)
+    }
+  )
+})
 
 const productionEntry = {
   devServerUrl: undefined,

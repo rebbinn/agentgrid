@@ -252,9 +252,229 @@
   min-width: 0;
   min-height: 0;
   background: var(--bg-terminal);
+  display: flex;
+}
+
+.workspace--empty {
   display: grid;
   place-items: center;
   padding: var(--space-5);
+}
+
+.pane-grid {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+}
+
+.pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-terminal);
+}
+
+.pane__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 30px;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--line);
+  box-shadow: inset 0 2px 0 transparent;
+  color: var(--text-dim);
+  min-width: 0;
+}
+
+.pane[data-active='true'] .pane__header {
+  color: var(--text);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.pane__title {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pane__meta {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pane__spacer {
+  flex: 1;
+}
+
+.pane__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-2) 0 0 var(--space-3);
+}
+
+.terminal-view {
+  width: 100%;
+  height: 100%;
+}
+
+.terminal-view .xterm {
+  height: 100%;
+}
+
+.pane__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: rgba(10, 12, 15, 0.94);
+  text-align: center;
+}
+
+.pane__overlay-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--err);
+}
+
+.pane__overlay-text {
+  margin: 0;
+  max-width: 420px;
+  color: var(--text-dim);
+  user-select: text;
+}
+
+.pane__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.icon-button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.split-button {
+  position: relative;
+  display: inline-flex;
+}
+
+.split-button__main {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.split-button__toggle {
+  padding: 0 var(--space-2);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left-color: rgba(4, 32, 28, 0.35);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 60;
+  min-width: 200px;
+  padding: var(--space-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-pop);
+}
+
+.menu__item {
+  display: block;
+  width: 100%;
+  padding: 6px var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu__item:hover,
+.menu__item:focus-visible {
+  background: var(--bg-hover);
+}
+
+.btn--danger {
+  background: var(--err);
+  border-color: var(--err);
+  color: #1a0605;
+  font-weight: 600;
+}
+
+.btn--danger:hover:not([aria-disabled='true']) {
+  background: #ff6b63;
+  border-color: #ff6b63;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-pop);
+}
+
+.dialog__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.dialog__text {
+  margin: 0 0 var(--space-4);
+  color: var(--text-dim);
+}
+
+.dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 
 .empty-state {
@@ -322,8 +542,20 @@
   background: var(--text-faint);
 }
 
-.dot--ok {
+.dot--running {
   background: var(--ok);
+}
+
+.dot--starting {
+  background: var(--warn);
+}
+
+.dot--exited {
+  background: var(--text-faint);
+}
+
+.dot--error {
+  background: var(--err);
 }
 
 .toasts {

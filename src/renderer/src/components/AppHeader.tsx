@@ -5,14 +5,15 @@ import { useUiStore } from '../state/ui-store'
 import { strings } from '../strings'
 import { Icon } from './Icon'
 import { Logo } from './Logo'
+import { NewTerminalButton } from './NewTerminalButton'
 
 export function AppHeader() {
   const projectPath = useProjectStore((state) => state.projectPath)
   const pickProject = useProjectPicker()
   const pushToast = useUiStore((state) => state.pushToast)
 
-  const notReady = (): void => {
-    pushToast('warning', strings.pendingEngine)
+  const layoutNotReady = (): void => {
+    pushToast('warning', strings.pendingLayout)
   }
 
   return (
@@ -42,23 +43,14 @@ export function AppHeader() {
           type="button"
           className="btn"
           aria-disabled="true"
-          data-tip={strings.pendingEngine}
-          onClick={notReady}
+          data-tip={strings.pendingLayout}
+          onClick={layoutNotReady}
         >
           <Icon name="grid" />
           {strings.header.layout}
         </button>
 
-        <button
-          type="button"
-          className="btn btn--primary"
-          aria-disabled="true"
-          data-tip={strings.pendingEngine}
-          onClick={notReady}
-        >
-          <Icon name="plus" />
-          {strings.header.newTerminal}
-        </button>
+        <NewTerminalButton />
       </div>
     </header>
   )
