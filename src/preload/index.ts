@@ -3,6 +3,8 @@ import {
   AppInfoSchema,
   ClaudeSessionListSchema,
   IpcChannel,
+  LaunchRequestListSchema,
+  LaunchRequestSchema,
   ProjectPickResultSchema,
   ShellListSchema,
   TerminalCreateResultSchema,
@@ -50,6 +52,12 @@ const api: AgentGridApi = {
   },
   sessions: {
     list: async () => ClaudeSessionListSchema.parse(await ipcRenderer.invoke(IpcChannel.sessionsList))
+  },
+  launcher: {
+    takePending: async () =>
+      LaunchRequestListSchema.parse(await ipcRenderer.invoke(IpcChannel.launchTakePending)),
+    onRequest: (listener) =>
+      subscribe(IpcChannel.launchRequest, (payload) => LaunchRequestSchema.parse(payload), listener)
   },
   clipboard: {
     readText: async () => String(await ipcRenderer.invoke(IpcChannel.clipboardRead)),

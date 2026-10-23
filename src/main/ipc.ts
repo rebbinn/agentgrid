@@ -20,6 +20,7 @@ import {
   TerminalWriteSchema,
   type AppInfo,
   type ClaudeSession,
+  type LaunchRequest,
   type ProjectPickResult,
   type ShellInfo,
   type TerminalCreateResult
@@ -32,6 +33,7 @@ export interface IpcServices {
   terminals: TerminalService
   getShells(): Promise<ShellDefinition[]>
   listSessions(): Promise<ClaudeSession[]>
+  takePendingLaunch(): LaunchRequest[]
 }
 
 function windowsBuildNumber(): number {
@@ -118,6 +120,11 @@ export function registerIpc(
   ipcMain.handle(IpcChannel.sessionsList, async (event): Promise<ClaudeSession[]> => {
     guard(event)
     return services.listSessions()
+  })
+
+  ipcMain.handle(IpcChannel.launchTakePending, (event): LaunchRequest[] => {
+    guard(event)
+    return services.takePendingLaunch()
   })
 
   ipcMain.handle(IpcChannel.clipboardRead, async (event): Promise<string> => {

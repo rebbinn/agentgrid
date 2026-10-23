@@ -3,6 +3,7 @@ import {
   AppInfoSchema,
   ClaudeSessionListSchema,
   ClipboardWriteSchema,
+  LaunchRequestSchema,
   MAX_WRITE_CHARS,
   ProjectPickResultSchema,
   TerminalAckSchema,
@@ -83,6 +84,21 @@ describe('terminal request validation', () => {
     expect(ClaudeSessionListSchema.safeParse([{ ...session, title: '' }]).success).toBe(false)
     expect(ClaudeSessionListSchema.safeParse([{ ...session, modifiedAt: -1 }]).success).toBe(false)
     expect(ClaudeSessionListSchema.safeParse('x').success).toBe(false)
+  })
+
+  it('validates launch requests coming from the main process', () => {
+    const session = {
+      id: '3975237b-df03-44fe-b8e1-be208c6646d1',
+      title: 'Fix login',
+      cwd: 'C:\\work',
+      modifiedAt: 1790000000000
+    }
+    expect(LaunchRequestSchema.safeParse({ kind: 'claude' }).success).toBe(true)
+    expect(LaunchRequestSchema.safeParse({ kind: 'resume', session }).success).toBe(true)
+    expect(LaunchRequestSchema.safeParse({ kind: 'session-missing' }).success).toBe(true)
+    expect(LaunchRequestSchema.safeParse({ kind: 'resume' }).success).toBe(false)
+    expect(LaunchRequestSchema.safeParse({ kind: 'resume', session: { ...session, id: 'bad' } }).success).toBe(false)
+    expect(LaunchRequestSchema.safeParse({ kind: 'run', command: 'calc' }).success).toBe(false)
   })
 
   it('limits how much text one write can carry', () => {

@@ -6,6 +6,9 @@ import { spawn as spawnPty } from 'node-pty'
 import { listClaudeSessions } from './claude-sessions'
 import { findOnPath } from './executables'
 import { registerIpc } from './ipc'
+import { buildJumpList } from './jump-list'
+import { parseLaunchArgs } from './launch-args'
+import { LaunchRouter } from './launch-router'
 import {
   CONTENT_SECURITY_POLICY,
   DEV_CONTENT_SECURITY_POLICY,
@@ -43,6 +46,31 @@ function getShells(): Promise<ShellDefinition[]> {
 function sendToWindow(channel: string, payload: unknown): void {
   const contents = mainWindow?.webContents
   if (contents && !contents.isDestroyed()) contents.send(channel, payload)
+}
+
+function listSessions(): ReturnType<typeof listClaudeSessions> {
+  return listClaudeSessions(claudeProjectsRoot())
+}
+
+const launchRouter = new LaunchRouter({
+  listSessions,
+  send: (request) => sendToWindow(IpcChannel.launchRequest, request)
+})
+
+const JUMP_LIST_MIN_INTERVAL_MS = 60_000
+let lastJumpListUpdate = 0
+
+async function refreshJumpList(): Promise<void> {
+  if (!app.isPackaged || process.platform !== 'win32') return
+  const now = Date.now()
+  if (now - lastJumpListUpdate < JUMP_LIST_MIN_INTERVAL_MS) return
+  lastJumpListUpdate = now
+  try {
+    const result = app.setJumpList(buildJumpList(await listSessions(), process.execPath))
+    if (result !== 'ok') console.warn(`Jump list was not updated: ${result}`)
+  } catch (error) {
+    console.warn('Jump list update failed', error)
+  }
 }
 
 const terminals = new TerminalService({
@@ -115,8 +143,13 @@ function createWindow(): void {
   })
 
   window.webContents.on('did-start-navigation', (details) => {
-    if (details.isMainFrame && !details.isSameDocument) terminals.killAll()
+    if (details.isMainFrame && !details.isSameDocument) {
+      terminals.killAll()
+      launchRouter.rendererReloaded()
+    }
   })
+
+  window.on('focus', () => void refreshJumpList())
 
   window.on('closed', () => {
     terminals.killAll()
@@ -137,10 +170,11 @@ const hasLock = app.requestSingleInstanceLock()
 if (!hasLock) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
     if (!mainWindow) return
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.focus()
+    void launchRouter.handle(parseLaunchArgs(argv))
   })
 
   app.whenReady().then(() => {
@@ -149,10 +183,13 @@ if (!hasLock) {
     registerIpc(() => mainWindow, trustedEntry, {
       terminals,
       getShells,
-      listSessions: () => listClaudeSessions(claudeProjectsRoot())
+      listSessions,
+      takePendingLaunch: () => launchRouter.takePending()
     })
     void getShells()
     createWindow()
+    void launchRouter.handle(parseLaunchArgs(process.argv))
+    void refreshJumpList()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

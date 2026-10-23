@@ -13,6 +13,8 @@ export const IpcChannel = {
   terminalData: 'terminal:data',
   terminalExit: 'terminal:exit',
   sessionsList: 'sessions:list',
+  launchTakePending: 'launch:take-pending',
+  launchRequest: 'launch:request',
   clipboardRead: 'clipboard:read',
   clipboardWrite: 'clipboard:write',
   externalOpen: 'external:open'
@@ -76,6 +78,14 @@ export const ClaudeSessionSchema = z.object({
 })
 export type ClaudeSession = z.infer<typeof ClaudeSessionSchema>
 export const ClaudeSessionListSchema = z.array(ClaudeSessionSchema)
+
+export const LaunchRequestSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('claude') }),
+  z.object({ kind: z.literal('resume'), session: ClaudeSessionSchema }),
+  z.object({ kind: z.literal('session-missing') })
+])
+export type LaunchRequest = z.infer<typeof LaunchRequestSchema>
+export const LaunchRequestListSchema = z.array(LaunchRequestSchema)
 
 export const TERMINAL_ERROR_CODES = [
   'cwd-missing',
@@ -152,6 +162,10 @@ export interface AgentGridApi {
   }
   sessions: {
     list(): Promise<ClaudeSession[]>
+  }
+  launcher: {
+    takePending(): Promise<LaunchRequest[]>
+    onRequest(listener: (request: LaunchRequest) => void): () => void
   }
   clipboard: {
     readText(): Promise<string>

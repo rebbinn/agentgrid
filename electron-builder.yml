@@ -1,0 +1,36 @@
+appId: az.agentgrid.app
+productName: AgentGrid
+copyright: Copyright © 2026 AgentGrid
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - package.json
+  - '!**/*.pdb'
+  - '!node_modules/node-pty/prebuilds/darwin-*/**'
+  - '!node_modules/node-pty/prebuilds/win32-arm64/**'
+  - '!node_modules/node-pty/**/win10-arm64/**'
+electronLanguages:
+  - en-US
+asar: true
+asarUnpack:
+  - node_modules/node-pty/**
+npmRebuild: false
+nodeGypRebuild: false
+buildDependenciesFromSource: false
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+nsis:
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: AgentGrid
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false

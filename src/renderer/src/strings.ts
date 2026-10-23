@@ -83,6 +83,7 @@ export const strings = {
     listLabel: 'Claude söhbətləri',
     open: (title: string) => `Söhbəti aç: ${title}`,
     alreadyOpen: 'Bu söhbət artıq açıqdır, ona keçdim.',
+    missing: 'Bu söhbət tapılmadı, silinmiş ola bilər.',
     paneTitle: (title: string) => `Claude · ${title}`,
     count: (count: number) => `${count} söhbət`
   },

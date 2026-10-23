@@ -6,12 +6,14 @@ import { Sidebar } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
 import { Toasts } from './components/Toasts'
 import { Workspace } from './components/Workspace'
+import { useLaunchRequests } from './hooks/use-launch-requests'
 import { useCollapseSidebarWhenNarrow } from './hooks/use-narrow-window'
 import { useTerminalStore } from './state/terminal-store'
 import { terminalRegistry } from './terminal/registry'
 
 export function App() {
   useCollapseSidebarWhenNarrow()
+  useLaunchRequests()
 
   useEffect(() => {
     terminalRegistry.init(useTerminalStore.getState().handleExit)

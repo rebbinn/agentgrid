@@ -33,6 +33,10 @@ export function createAgentGridMock() {
       onExit: vi.fn(() => () => undefined)
     },
     sessions: { list: vi.fn().mockResolvedValue([]) },
+    launcher: {
+      takePending: vi.fn().mockResolvedValue([]),
+      onRequest: vi.fn<AgentGridApi['launcher']['onRequest']>(() => () => undefined)
+    },
     clipboard: {
       readText: vi.fn().mockResolvedValue(''),
       writeText: vi.fn().mockResolvedValue(undefined)

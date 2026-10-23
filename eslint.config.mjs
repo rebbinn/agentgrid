@@ -19,5 +19,10 @@ export default tseslint.config(
   {
     files: ['src/main/**/*.ts', 'src/preload/**/*.ts', 'electron.vite.config.ts'],
     languageOptions: { globals: globals.node }
+  },
+  {
+    files: ['scripts/**/*.cjs'],
+    languageOptions: { globals: globals.node, sourceType: 'commonjs' },
+    rules: { '@typescript-eslint/no-require-imports': 'off' }
   }
 )
