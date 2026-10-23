@@ -3,6 +3,7 @@ import { useProjectPicker } from '../hooks/use-project-picker'
 import { useProjectStore } from '../state/project-store'
 import { useTerminalStore } from '../state/terminal-store'
 import { strings } from '../strings'
+import { ClaudeLogo } from './ClaudeLogo'
 import { Icon } from './Icon'
 import { PaneGrid } from './PaneGrid'
 
@@ -34,7 +35,7 @@ export function Workspace() {
             className="btn btn--primary"
             onClick={() => void launch({ agentId: 'claude' })}
           >
-            <Icon name="spark" />
+            <ClaudeLogo />
             {strings.empty.startClaude}
           </button>
           <button type="button" className="btn" onClick={() => void launch()}>

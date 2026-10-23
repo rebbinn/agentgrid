@@ -1,6 +1,7 @@
 import { useLaunch } from '../hooks/use-launch'
 import { useUiStore } from '../state/ui-store'
 import { strings } from '../strings'
+import { ClaudeLogo } from './ClaudeLogo'
 import { Icon } from './Icon'
 
 export function Rail() {
@@ -21,7 +22,7 @@ export function Rail() {
         data-tip={strings.rail.claudeTip}
         onClick={() => void launch({ agentId: 'claude' })}
       >
-        <Icon name="spark" size={18} />
+        <ClaudeLogo size={20} />
       </button>
 
       <button

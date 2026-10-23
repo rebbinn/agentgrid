@@ -1,5 +1,6 @@
 import { useLaunch } from '../hooks/use-launch'
 import { strings } from '../strings'
+import { ClaudeLogo } from './ClaudeLogo'
 import { Icon } from './Icon'
 
 interface EmptySlotProps {
@@ -18,7 +19,7 @@ export function EmptySlot({ column, row }: EmptySlotProps) {
       aria-label={strings.layout.emptySlot}
     >
       <button type="button" className="btn btn--primary" onClick={() => void launch({ agentId: 'claude' })}>
-        <Icon name="spark" />
+        <ClaudeLogo />
         {strings.empty.startClaude}
       </button>
       <button type="button" className="btn" onClick={() => void launch()}>

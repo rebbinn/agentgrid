@@ -4,7 +4,6 @@ const PATHS = {
   plus: 'M12 5v14M5 12h14',
   close: 'M6 6l12 12M18 6L6 18',
   grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
-  spark: 'M12 3v5M12 16v5M3 12h5M16 12h5M5.6 5.6l3.5 3.5M14.9 14.9l3.5 3.5M18.4 5.6l-3.5 3.5M9.1 14.9l-3.5 3.5',
   terminal: 'M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM7 10l3 2-3 2M12 15h5',
   restart: 'M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7',
   clear: 'M21 5H9l-6 7 6 7h12zM13 9l4 6M17 9l-4 6',
