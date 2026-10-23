@@ -1,0 +1,55 @@
+:root {
+  --bg-app: #0d0f12;
+  --bg-surface: #12151a;
+  --bg-raised: #181c22;
+  --bg-hover: #1f242c;
+  --bg-active: #262c36;
+  --bg-terminal: #0a0c0f;
+
+  --line: #222730;
+  --line-strong: #2f3641;
+
+  --text: #e6e9ee;
+  --text-dim: #a3acb8;
+  --text-faint: #7a8491;
+
+  --accent: #2dd4bf;
+  --accent-strong: #5eead4;
+  --accent-soft: rgba(45, 212, 191, 0.14);
+  --accent-line: rgba(45, 212, 191, 0.55);
+  --accent-fg: #04201c;
+
+  --ok: #3fb950;
+  --warn: #e3b341;
+  --err: #f85149;
+  --err-soft: rgba(248, 81, 73, 0.14);
+
+  --agent-claude: #e08a5b;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  --font-ui: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Cascadia Code', 'Cascadia Mono', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+
+  --header-height: 44px;
+  --statusbar-height: 26px;
+  --rail-width: 52px;
+  --sidebar-width: 248px;
+
+  --transition-fast: 110ms ease;
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
