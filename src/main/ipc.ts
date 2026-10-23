@@ -25,6 +25,7 @@ import {
   type ShellInfo,
   type TerminalCreateResult
 } from '@shared/ipc'
+import { AppStateSchema, type AppState, type LoadedSettings } from '@shared/settings'
 import { isOpenableExternalUrl, isTrustedSender, type TrustedEntry } from './security'
 import type { ShellDefinition } from './shells'
 import type { TerminalService } from './terminal-service'
@@ -34,6 +35,9 @@ export interface IpcServices {
   getShells(): Promise<ShellDefinition[]>
   listSessions(): Promise<ClaudeSession[]>
   takePendingLaunch(): LaunchRequest[]
+  loadSettings(): LoadedSettings
+  saveSettings(state: AppState): void
+  settingsFlushed(): void
 }
 
 function windowsBuildNumber(): number {
@@ -120,6 +124,21 @@ export function registerIpc(
   ipcMain.handle(IpcChannel.sessionsList, async (event): Promise<ClaudeSession[]> => {
     guard(event)
     return services.listSessions()
+  })
+
+  ipcMain.handle(IpcChannel.settingsLoad, (event): LoadedSettings => {
+    guard(event)
+    return services.loadSettings()
+  })
+
+  ipcMain.on(IpcChannel.settingsSave, (event, payload: unknown) => {
+    if (!isTrusted(event)) return
+    const parsed = AppStateSchema.safeParse(payload)
+    if (parsed.success) services.saveSettings(parsed.data satisfies AppState)
+  })
+
+  ipcMain.on(IpcChannel.settingsFlushDone, (event) => {
+    if (isTrusted(event)) services.settingsFlushed()
   })
 
   ipcMain.handle(IpcChannel.launchTakePending, (event): LaunchRequest[] => {

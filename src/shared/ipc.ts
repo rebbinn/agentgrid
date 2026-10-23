@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { AGENT_IDS } from './agents'
+import type { AppState, LoadedSettings } from './settings'
 
 export const IpcChannel = {
   appInfo: 'app:info',
@@ -13,6 +14,10 @@ export const IpcChannel = {
   terminalData: 'terminal:data',
   terminalExit: 'terminal:exit',
   sessionsList: 'sessions:list',
+  settingsLoad: 'settings:load',
+  settingsSave: 'settings:save',
+  settingsFlushRequest: 'settings:flush-request',
+  settingsFlushDone: 'settings:flush-done',
   launchTakePending: 'launch:take-pending',
   launchRequest: 'launch:request',
   clipboardRead: 'clipboard:read',
@@ -166,6 +171,12 @@ export interface AgentGridApi {
   launcher: {
     takePending(): Promise<LaunchRequest[]>
     onRequest(listener: (request: LaunchRequest) => void): () => void
+  }
+  settings: {
+    load(): Promise<LoadedSettings>
+    save(state: AppState): void
+    onFlushRequest(listener: () => void): () => void
+    flushDone(): void
   }
   clipboard: {
     readText(): Promise<string>

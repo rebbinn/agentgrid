@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { findAgent, type AgentId } from '@shared/agents'
 import type { ShellInfo, TerminalErrorCode, TerminalExitEvent } from '@shared/ipc'
+import type { SavedPane } from '@shared/settings'
 import { getAppInfo } from '../lib/app-info'
 import { getShells, pickDefaultShell } from '../lib/shells'
 import { strings } from '../strings'
@@ -11,7 +12,7 @@ import { useUiStore } from './ui-store'
 
 export const MAX_TITLE_LENGTH = 40
 
-export type PaneStatus = 'starting' | 'running' | 'exited' | 'error'
+export type PaneStatus = 'idle' | 'starting' | 'running' | 'exited' | 'error'
 
 export interface Pane {
   id: string
@@ -43,6 +44,10 @@ interface TerminalState {
   launch: (options: LaunchOptions) => Promise<string | null>
   spawnPane: (id: string, cols: number, rows: number) => Promise<void>
   restart: (id: string) => Promise<void>
+  startPane: (id: string) => Promise<void>
+  startAllIdle: () => Promise<void>
+  restorePanes: (saved: readonly SavedPane[], activeIndex: number | null, autoStart: boolean) => Promise<void>
+  reset: () => void
   close: (id: string) => void
   setActive: (id: string) => void
   clear: (id: string) => void
@@ -54,6 +59,23 @@ interface TerminalState {
   adjustFontSize: (id: string, step: number) => void
   resetFontSize: (id: string) => void
   toggleFocus: (id: string) => void
+}
+
+export function capturePanes(): { panes: SavedPane[]; activePane: number | null } {
+  const { panes, activePaneId } = useTerminalStore.getState()
+  const activeIndex = panes.findIndex((pane) => pane.id === activePaneId)
+  return {
+    panes: panes.map((pane) => ({
+      title: pane.title,
+      shellId: pane.shellId,
+      shellLabel: pane.shellLabel,
+      cwd: pane.cwd,
+      fontSize: pane.fontSize,
+      ...(pane.agentId ? { agentId: pane.agentId } : {}),
+      ...(pane.resumeSessionId ? { resumeSessionId: pane.resumeSessionId } : {})
+    })),
+    activePane: activeIndex === -1 ? null : activeIndex
+  }
 }
 
 export function clampFontSize(size: number): number {
@@ -182,6 +204,11 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
     restart: async (id) => {
       const managed = terminalRegistry.get(id)
       if (!managed || !findPane(id)) return
+      if (findPane(id)?.status === 'idle') {
+        await get().startPane(id)
+        managed.focus()
+        return
+      }
       window.agentgrid.terminal.kill(id)
       managed.reset()
       updatePane(id, {
@@ -194,6 +221,61 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
       const size = managed.fit() ?? { cols: managed.term.cols, rows: managed.term.rows }
       await get().spawnPane(id, size.cols, size.rows)
       managed.focus()
+    },
+
+    startPane: async (id) => {
+      const pane = findPane(id)
+      const managed = terminalRegistry.get(id)
+      if (!pane || !managed || pane.status !== 'idle') return
+      updatePane(id, { status: 'starting' })
+      managed.spawnRequested = true
+      const size = managed.fit() ?? { cols: managed.term.cols, rows: managed.term.rows }
+      await get().spawnPane(id, size.cols, size.rows)
+    },
+
+    startAllIdle: async () => {
+      const idle = get().panes.filter((pane) => pane.status === 'idle')
+      await Promise.all(idle.map((pane) => get().startPane(pane.id)))
+    },
+
+    restorePanes: async (saved, activeIndex, autoStart) => {
+      let windowsBuild = 0
+      try {
+        windowsBuild = (await getAppInfo()).osBuild
+      } catch {
+        windowsBuild = 0
+      }
+      const restored: Pane[] = saved.map((entry) => {
+        const id = crypto.randomUUID()
+        const managed = terminalRegistry.create(id, windowsBuild)
+        managed.onZoom = (step) => {
+          if (step === 'reset') get().resetFontSize(id)
+          else get().adjustFontSize(id, step)
+        }
+        return {
+          id,
+          seq: nextSeq++,
+          fontSize: entry.fontSize,
+          title: entry.title,
+          shellId: entry.shellId,
+          shellLabel: entry.shellLabel,
+          cwd: entry.cwd,
+          agentId: entry.agentId,
+          resumeSessionId: entry.resumeSessionId,
+          status: 'idle'
+        }
+      })
+      const active = activeIndex === null ? undefined : restored[activeIndex]
+      set({ panes: restored, activePaneId: (active ?? restored[0])?.id ?? null })
+      if (autoStart) await get().startAllIdle()
+    },
+
+    reset: () => {
+      for (const pane of get().panes) {
+        window.agentgrid.terminal.kill(pane.id)
+        terminalRegistry.remove(pane.id)
+      }
+      set({ panes: [], activePaneId: null })
     },
 
     close: (id) => {

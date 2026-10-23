@@ -55,6 +55,60 @@ export const strings = {
     claudeTip: 'Claude — yeni CMD-də işə sal',
     toggleSidebar: 'Yan paneli göstər / gizlət'
   },
+  workspace: {
+    defaultName: 'Əsas',
+    namePrefix: 'İş sahəsi',
+    switcherLabel: 'İş sahəsi',
+    listTitle: 'İş sahələri',
+    newItem: 'Yeni iş sahəsi…',
+    renameItem: 'Adı dəyişdir…',
+    deleteItem: 'Bu iş sahəsini sil…',
+    paneCount: (count: number) => `${count} terminal`,
+    noProject: 'layihə yoxdur',
+    loading: 'Yüklənir…',
+    dialogs: {
+      createTitle: 'Yeni iş sahəsi',
+      renameTitle: 'İş sahəsinin adı',
+      nameLabel: 'Ad',
+      create: 'Yarat',
+      save: 'Yadda saxla',
+      cancel: 'Ləğv et',
+      nameRequired: 'Ad boş ola bilməz.',
+      deleteTitle: 'İş sahəsi silinsin?',
+      deleteText: (name: string) =>
+        `"${name}" iş sahəsi və onun saxlanmış terminal düzülüşü silinəcək. Layihə qovluğunuza toxunulmayacaq.`,
+      deleteRunning: (count: number) => ` İçindəki ${count} işləyən terminal dayandırılacaq.`,
+      delete: 'Sil',
+      switchTitle: 'İş sahəsi dəyişdirilsin?',
+      switchText: (running: number, name: string) =>
+        `Hazırkı iş sahəsində ${running} işləyən terminal var. "${name}" iş sahəsinə keçsəniz, onlar dayandırılacaq. Düzülüş və terminal konfiqurasiyası yadda qalacaq.`,
+      switch: 'Dayandır və keç'
+    }
+  },
+  restore: {
+    bannerLabel: 'Bərpa olunmuş terminallar',
+    banner: (count: number) =>
+      `${count} terminal saxlanmış konfiqurasiyadan bərpa olundu. Proseslər proqram bağlananda dayanıb, ona görə gözləyirlər.`,
+    startAll: 'Hamısını başlat',
+    autoStart: 'Həmişə avtomatik başlat',
+    autoStartHint: 'Bu iş sahəsi açılanda saxlanmış terminallar özləri başlayacaq',
+    overlayTitle: 'Saxlanmış terminal',
+    overlayText: (shell: string, folder: string) =>
+      `${shell} · ${folder}. Proses işləmir, başlatmaq üçün düyməyə basın.`,
+    overlayCommand: (command: string) => `Başlayanda bu komanda işə düşəcək: ${command}`,
+    start: 'Başlat'
+  },
+  notices: {
+    reset: (file: string) =>
+      file
+        ? `Ayarlar faylı zədələnmişdi, oxuna bilmədi. Köhnə fayl "${file}" adı ilə saxlanıb, proqram boş ayarlarla başladı.`
+        : 'Ayarlar oxuna bilmədi, proqram boş ayarlarla başladı.',
+    recovered: (file: string) =>
+      `Ayarlar faylı zədələnmişdi, son yaxşı nüsxədən bərpa olundu. Zədəli fayl "${file}" adı ilə saxlanıb.`,
+    newer: (file: string) =>
+      `Ayarlar faylı bu proqramdan daha yeni versiyaya aiddir. Ona toxunmadım ("${file}" adı ilə saxlanıb), boş ayarlarla başladım.`,
+    dropped: (count: number) => `${count} iş sahəsi oxuna bilmədi və atlandı.`
+  },
   time: {
     now: 'indicə',
     minutes: (count: number) => `${count} dəq əvvəl`,
@@ -113,6 +167,7 @@ export const strings = {
     launchFailed: 'Terminal açmaq alınmadı',
     noShell: 'Bu kompüterdə heç bir shell tapılmadı',
     states: {
+      idle: 'Gözləyir',
       starting: 'Başlayır',
       running: 'İşləyir',
       exited: 'Bitib',

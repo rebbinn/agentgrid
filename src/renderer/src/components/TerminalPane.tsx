@@ -1,4 +1,5 @@
-import { memo, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
+import { memo, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
+import { findAgent } from '@shared/agents'
 import { useClosePane } from '../hooks/use-close-pane'
 import { folderName } from '../lib/path'
 import { useTerminalStore, MAX_TITLE_LENGTH, type Pane } from '../state/terminal-store'
@@ -10,6 +11,12 @@ import { Icon } from './Icon'
 import { TerminalView } from './TerminalView'
 
 const DRAG_TYPE = 'application/x-agentgrid-pane'
+
+function describeCommand(pane: Pane): string {
+  if (!pane.agentId) return ''
+  const command = findAgent(pane.agentId).command
+  return pane.resumeSessionId ? `${command} --resume …` : command
+}
 
 interface TerminalPaneProps {
   pane: Pane
@@ -30,7 +37,15 @@ function TerminalPaneComponent({ pane, active, column, row, focusMode, hidden }:
   }, [pane.id, pane.fontSize])
 
   const store = useTerminalStore.getState
-  const activate = (): void => store().setActive(pane.id)
+  const renamingRef = useRef(false)
+  const activate = (event: MouseEvent<HTMLElement>): void => {
+    store().setActive(pane.id)
+    const target = event.target as HTMLElement
+    if (target.closest('button, input, [role="menu"], [role="menuitem"]')) return
+    window.setTimeout(() => {
+      if (!renamingRef.current) terminalRegistry.get(pane.id)?.focus()
+    }, 0)
+  }
   const restart = (): void => void store().restart(pane.id)
   const focusTerminal = (): void => terminalRegistry.get(pane.id)?.focus()
 
@@ -39,6 +54,7 @@ function TerminalPaneComponent({ pane, active, column, row, focusMode, hidden }:
   const finishRename = (value: string | null): void => {
     if (renameFinished.current) return
     renameFinished.current = true
+    renamingRef.current = false
     if (value !== null) store().renamePane(pane.id, value)
     setRenaming(false)
     focusTerminal()
@@ -46,6 +62,7 @@ function TerminalPaneComponent({ pane, active, column, row, focusMode, hidden }:
 
   const startRename = (): void => {
     renameFinished.current = false
+    renamingRef.current = true
     setRenaming(true)
   }
 
@@ -201,6 +218,29 @@ function TerminalPaneComponent({ pane, active, column, row, focusMode, hidden }:
 
       <div className="pane__body">
         <TerminalView id={pane.id} active={active && !renaming} />
+
+        {pane.status === 'idle' && (
+          <div className="pane__overlay" role="group" aria-label={strings.restore.overlayTitle}>
+            <h2 className="pane__overlay-title pane__overlay-title--info">{strings.restore.overlayTitle}</h2>
+            <p className="pane__overlay-text">
+              {strings.restore.overlayText(pane.shellLabel, folderName(pane.cwd))}
+            </p>
+            {pane.agentId && (
+              <p className="pane__overlay-text">
+                {strings.restore.overlayCommand(describeCommand(pane))}
+              </p>
+            )}
+            <div className="empty-state__actions">
+              <button type="button" className="btn btn--primary" onClick={restart}>
+                <Icon name="restart" />
+                {strings.restore.start}
+              </button>
+              <button type="button" className="btn" onClick={() => closePane(pane.id)}>
+                {strings.terminal.close}
+              </button>
+            </div>
+          </div>
+        )}
 
         {pane.status === 'error' && pane.errorCode && (
           <div className="pane__overlay" role="alert">

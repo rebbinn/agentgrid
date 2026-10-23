@@ -3,6 +3,12 @@ import { create } from 'zustand'
 export type ToastKind = 'success' | 'warning' | 'error'
 export type SidebarTab = 'projects' | 'sessions'
 
+export type AppDialog =
+  | { kind: 'new-workspace' }
+  | { kind: 'rename-workspace'; id: string }
+  | { kind: 'delete-workspace'; id: string }
+  | { kind: 'switch-workspace'; id: string }
+
 export interface Toast {
   id: number
   kind: ToastKind
@@ -15,6 +21,9 @@ interface UiState {
   sessionsTabOpen: boolean
   toasts: Toast[]
   pendingCloseId: string | null
+  dialog: AppDialog | null
+  openDialog: (dialog: AppDialog) => void
+  closeDialog: () => void
   askToClose: (id: string) => void
   cancelClose: () => void
   toggleSidebar: () => void
@@ -34,6 +43,9 @@ export const useUiStore = create<UiState>((set) => ({
   sessionsTabOpen: false,
   toasts: [],
   pendingCloseId: null,
+  dialog: null,
+  openDialog: (dialog) => set({ dialog }),
+  closeDialog: () => set({ dialog: null }),
   askToClose: (id) => set({ pendingCloseId: id }),
   cancelClose: () => set({ pendingCloseId: null }),
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),

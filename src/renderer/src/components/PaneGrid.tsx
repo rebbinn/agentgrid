@@ -10,6 +10,7 @@ import { useTerminalStore } from '../state/terminal-store'
 import { strings } from '../strings'
 import { EmptySlot } from './EmptySlot'
 import { FocusTabs } from './FocusTabs'
+import { RestoreBanner } from './RestoreBanner'
 import { Splitter } from './Splitter'
 import { TerminalPane } from './TerminalPane'
 
@@ -44,6 +45,7 @@ export function PaneGrid() {
 
   return (
     <div className="pane-area">
+      <RestoreBanner />
       {focusMode && <FocusTabs />}
       <div
         ref={containerRef}

@@ -18,6 +18,8 @@ export function TerminalView({ id, active }: TerminalViewProps) {
 
     const spawnOnce = (size: TerminalSize | null): void => {
       if (!size || managed.spawnRequested) return
+      const pane = useTerminalStore.getState().panes.find((candidate) => candidate.id === id)
+      if (pane?.status !== 'starting') return
       managed.spawnRequested = true
       void useTerminalStore.getState().spawnPane(id, size.cols, size.rows)
     }

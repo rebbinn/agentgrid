@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import type { AgentGridApi, ShellInfo } from '../../src/shared/ipc'
+import { defaultAppState } from '../../src/shared/settings'
 
 export const CMD_SHELL: ShellInfo = { id: 'cmd', label: 'Command Prompt', kind: 'cmd' }
 export const POWERSHELL_SHELL: ShellInfo = {
@@ -33,6 +34,12 @@ export function createAgentGridMock() {
       onExit: vi.fn(() => () => undefined)
     },
     sessions: { list: vi.fn().mockResolvedValue([]) },
+    settings: {
+      load: vi.fn().mockResolvedValue({ state: defaultAppState(), notices: [] }),
+      save: vi.fn(),
+      onFlushRequest: vi.fn<AgentGridApi['settings']['onFlushRequest']>(() => () => undefined),
+      flushDone: vi.fn()
+    },
     launcher: {
       takePending: vi.fn().mockResolvedValue([]),
       onRequest: vi.fn<AgentGridApi['launcher']['onRequest']>(() => () => undefined)

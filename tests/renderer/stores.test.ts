@@ -22,11 +22,20 @@ describe('project store', () => {
     expect(useProjectStore.getState().recentPaths).toEqual(['C:\\work\\a', 'C:\\work\\b'])
   })
 
-  it('keeps at most eight recent projects', () => {
+  it('keeps at most twenty recent projects, newest first', () => {
     const { openProject } = useProjectStore.getState()
-    for (let index = 0; index < 12; index++) openProject(`C:\\work\\p${index}`)
-    expect(useProjectStore.getState().recentPaths).toHaveLength(8)
-    expect(useProjectStore.getState().recentPaths[0]).toBe('C:\\work\\p11')
+    for (let index = 0; index < 25; index++) openProject(`C:\\work\\p${index}`)
+    expect(useProjectStore.getState().recentPaths).toHaveLength(20)
+    expect(useProjectStore.getState().recentPaths[0]).toBe('C:\\work\\p24')
+  })
+
+  it('can replace the list and set the project without touching recents', () => {
+    useProjectStore.getState().setRecentPaths(['C:\\a', 'C:\\b'])
+    useProjectStore.getState().setProject('C:\\c')
+    expect(useProjectStore.getState().recentPaths).toEqual(['C:\\a', 'C:\\b'])
+    expect(useProjectStore.getState().projectPath).toBe('C:\\c')
+    useProjectStore.getState().setProject(null)
+    expect(useProjectStore.getState().projectPath).toBeNull()
   })
 })
 

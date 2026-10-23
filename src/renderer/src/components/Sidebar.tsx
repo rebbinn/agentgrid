@@ -1,9 +1,56 @@
 import { folderName } from '../lib/path'
 import { useProjectStore } from '../state/project-store'
+import { useTerminalStore } from '../state/terminal-store'
 import { useUiStore } from '../state/ui-store'
+import { requestWorkspaceSwitch } from '../state/workspace-actions'
+import { useWorkspaceStore } from '../state/workspace-store'
 import { strings } from '../strings'
 import { Icon } from './Icon'
 import { SessionsPanel } from './SessionsPanel'
+
+function WorkspacesSection() {
+  const workspaces = useWorkspaceStore((state) => state.workspaces)
+  const activeId = useWorkspaceStore((state) => state.activeId)
+  const livePaneCount = useTerminalStore((state) => state.panes.length)
+  const liveProject = useProjectStore((state) => state.projectPath)
+  const openDialog = useUiStore((state) => state.openDialog)
+
+  if (workspaces.length === 0) return null
+
+  return (
+    <section className="sidebar__section" aria-label={strings.workspace.listTitle}>
+      <h2 className="sidebar__title">{strings.workspace.listTitle}</h2>
+      {workspaces.map((item) => {
+        const isActive = item.id === activeId
+        const paneCount = isActive ? livePaneCount : item.panes.length
+        const project = isActive ? liveProject : item.projectPath
+        return (
+          <button
+            key={item.id}
+            type="button"
+            className="path-item"
+            aria-current={isActive ? 'true' : undefined}
+            onClick={() => requestWorkspaceSwitch(item.id)}
+          >
+            <span className="path-item__name">{item.name}</span>
+            <span className="path-item__path">
+              {strings.workspace.paneCount(paneCount)} ·{' '}
+              {project ? folderName(project) : strings.workspace.noProject}
+            </span>
+          </button>
+        )
+      })}
+      <button
+        type="button"
+        className="btn btn--ghost sidebar__action"
+        onClick={() => openDialog({ kind: 'new-workspace' })}
+      >
+        <Icon name="plus" size={14} />
+        {strings.workspace.newItem}
+      </button>
+    </section>
+  )
+}
 
 function ProjectsPanel() {
   const projectPath = useProjectStore((state) => state.projectPath)
@@ -13,6 +60,7 @@ function ProjectsPanel() {
 
   return (
     <>
+      <WorkspacesSection />
       <section className="sidebar__section">
         <h2 className="sidebar__title">{strings.sidebar.project}</h2>
         {projectPath ? (

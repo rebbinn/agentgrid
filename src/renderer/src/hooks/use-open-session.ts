@@ -14,7 +14,7 @@ export function useOpenSession(): (session: ClaudeSession) => Promise<void> {
       const alreadyOpen = store.panes.find(
         (pane) =>
           pane.resumeSessionId === session.id &&
-          (pane.status === 'running' || pane.status === 'starting')
+          (pane.status === 'running' || pane.status === 'starting' || pane.status === 'idle')
       )
       if (alreadyOpen) {
         store.setActive(alreadyOpen.id)

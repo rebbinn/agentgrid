@@ -6,6 +6,7 @@ import { Icon } from './Icon'
 import { LayoutSelector } from './LayoutSelector'
 import { Logo } from './Logo'
 import { NewTerminalButton } from './NewTerminalButton'
+import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
 export function AppHeader() {
   const projectPath = useProjectStore((state) => state.projectPath)
@@ -18,6 +19,8 @@ export function AppHeader() {
           <Logo />
           <span className="header__brand-name">{strings.appName}</span>
         </div>
+
+        <WorkspaceSwitcher />
 
         <button
           type="button"

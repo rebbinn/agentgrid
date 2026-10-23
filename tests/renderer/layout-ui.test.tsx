@@ -206,6 +206,39 @@ describe('focus mode', () => {
   })
 })
 
+describe('keyboard focus after clicking a pane', () => {
+  it('puts the keyboard back into the terminal after the pane title is clicked', async () => {
+    await openPanes(2)
+    const pane = screen.getByRole('region', { name: 'Terminal: Claude 2' })
+    const managed = fakeRegistry.get(useTerminalStore.getState().panes[1]!.id)!
+    managed.focus.mockClear()
+    fireEvent.mouseDown(pane.querySelector('.pane__title')!)
+    await waitFor(() => expect(managed.focus).toHaveBeenCalled())
+  })
+
+  it('does not steal focus from buttons, the rename box or menus inside the pane header', async () => {
+    await openPanes(1)
+    const pane = screen.getByRole('region', { name: 'Terminal: Claude' })
+    const managed = fakeRegistry.get(useTerminalStore.getState().panes[0]!.id)!
+    managed.focus.mockClear()
+    fireEvent.mouseDown(within(pane).getByRole('button', { name: 'Panel əməliyyatları' }))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(managed.focus).not.toHaveBeenCalled()
+  })
+
+  it('does not pull focus away from the rename box', async () => {
+    await openPanes(1)
+    const title = screen.getByText('Claude', { selector: '.pane__title' })
+    const managed = fakeRegistry.get(useTerminalStore.getState().panes[0]!.id)!
+    fireEvent.mouseDown(title)
+    fireEvent.doubleClick(title)
+    managed.focus.mockClear()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(screen.getByRole('textbox', { name: 'Terminalın adı' })).toBeTruthy()
+    expect(managed.focus).not.toHaveBeenCalled()
+  })
+})
+
 describe('pane menu', () => {
   function openMenu(title: string): HTMLElement {
     const pane = screen.getByRole('region', { name: `Terminal: ${title}` })

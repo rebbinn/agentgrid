@@ -1,13 +1,7 @@
+import type { LayoutPresetId } from '@shared/layout-presets'
 import { autoGridDimensions } from './auto-grid'
 
-export type LayoutPresetId =
-  | 'auto'
-  | 'single'
-  | 'columns'
-  | 'rows'
-  | 'grid-2x2'
-  | 'grid-3x2'
-  | 'grid-2x3'
+export type { LayoutPresetId }
 
 export interface LayoutPreset {
   id: LayoutPresetId

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { SavedLayout } from '@shared/settings'
 import type { LayoutPresetId } from '../lib/layout'
 
 interface LayoutState {
@@ -11,6 +12,7 @@ interface LayoutState {
   setColumnSizes: (sizes: number[]) => void
   setRowSizes: (sizes: number[]) => void
   resetSizes: () => void
+  applyLayout: (layout: SavedLayout) => void
 }
 
 export const useLayoutStore = create<LayoutState>((set) => ({
@@ -22,5 +24,17 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   setFocusMode: (focusMode) => set({ focusMode }),
   setColumnSizes: (columnSizes) => set({ columnSizes }),
   setRowSizes: (rowSizes) => set({ rowSizes }),
-  resetSizes: () => set({ columnSizes: [], rowSizes: [] })
+  resetSizes: () => set({ columnSizes: [], rowSizes: [] }),
+  applyLayout: (layout) =>
+    set({
+      preset: layout.preset,
+      focusMode: layout.focusMode,
+      columnSizes: [...layout.columnSizes],
+      rowSizes: [...layout.rowSizes]
+    })
 }))
+
+export function captureLayout(): SavedLayout {
+  const { preset, focusMode, columnSizes, rowSizes } = useLayoutStore.getState()
+  return { preset, focusMode, columnSizes: [...columnSizes], rowSizes: [...rowSizes] }
+}

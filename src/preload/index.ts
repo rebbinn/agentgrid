@@ -12,6 +12,7 @@ import {
   TerminalExitEventSchema,
   type AgentGridApi
 } from '../shared/ipc'
+import { LoadedSettingsSchema } from '../shared/settings'
 
 function subscribe<T>(
   channel: string,
@@ -58,6 +59,12 @@ const api: AgentGridApi = {
       LaunchRequestListSchema.parse(await ipcRenderer.invoke(IpcChannel.launchTakePending)),
     onRequest: (listener) =>
       subscribe(IpcChannel.launchRequest, (payload) => LaunchRequestSchema.parse(payload), listener)
+  },
+  settings: {
+    load: async () => LoadedSettingsSchema.parse(await ipcRenderer.invoke(IpcChannel.settingsLoad)),
+    save: (state) => ipcRenderer.send(IpcChannel.settingsSave, state),
+    onFlushRequest: (listener) => subscribe(IpcChannel.settingsFlushRequest, () => undefined, listener),
+    flushDone: () => ipcRenderer.send(IpcChannel.settingsFlushDone)
   },
   clipboard: {
     readText: async () => String(await ipcRenderer.invoke(IpcChannel.clipboardRead)),

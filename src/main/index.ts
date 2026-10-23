@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, BrowserWindow, session, shell } from 'electron'
+import { app, BrowserWindow, screen, session, shell } from 'electron'
 import { spawn as spawnPty } from 'node-pty'
 import { listClaudeSessions } from './claude-sessions'
 import { findOnPath } from './executables'
@@ -16,10 +16,46 @@ import {
   type TrustedEntry
 } from './security'
 import { createShellDiscoveryDeps, discoverShells, type ShellDefinition } from './shells'
+import { SettingsStore } from './settings-store'
 import { TerminalService } from './terminal-service'
+import {
+  DEFAULT_HEIGHT,
+  DEFAULT_WIDTH,
+  MIN_HEIGHT,
+  MIN_WIDTH,
+  resolveWindowBounds
+} from './window-state'
 import { IpcChannel } from '@shared/ipc'
+import { toAppState, type LoadedSettings, type SettingsNotice } from '@shared/settings'
 
 app.setName('AgentGrid')
+
+const settingsStore = new SettingsStore(app.getPath('userData'))
+let startupNotices: SettingsNotice[] = []
+
+function loadedSettings(): LoadedSettings {
+  const notices = startupNotices
+  startupNotices = []
+  return { state: toAppState(settingsStore.snapshot()), notices }
+}
+
+const RENDERER_FLUSH_TIMEOUT_MS = 800
+let flushWaiter: (() => void) | null = null
+
+function requestRendererFlush(): Promise<void> {
+  const contents = mainWindow?.webContents
+  if (!contents || contents.isDestroyed()) return Promise.resolve()
+  return new Promise((resolve) => {
+    const finish = (): void => {
+      clearTimeout(timer)
+      flushWaiter = null
+      resolve()
+    }
+    const timer = setTimeout(finish, RENDERER_FLUSH_TIMEOUT_MS)
+    flushWaiter = finish
+    contents.send(IpcChannel.settingsFlushRequest)
+  })
+}
 
 const devServerUrl = process.env['ELECTRON_RENDERER_URL']
 const trustedEntry: TrustedEntry = {
@@ -109,12 +145,41 @@ function installSecurityPolicies(): void {
   session.defaultSession.setPermissionCheckHandler(() => false)
 }
 
+const WINDOW_STATE_DEBOUNCE_MS = 600
+
+function trackWindowState(window: BrowserWindow): void {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const capture = (): void => {
+    if (window.isDestroyed() || window.isMinimized() || window.isFullScreen()) return
+    const bounds = window.getNormalBounds()
+    void settingsStore.updateWindowState({
+      width: bounds.width,
+      height: bounds.height,
+      x: bounds.x,
+      y: bounds.y,
+      maximized: window.isMaximized()
+    })
+  }
+  const schedule = (): void => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(capture, WINDOW_STATE_DEBOUNCE_MS)
+  }
+  window.on('resize', schedule)
+  window.on('move', schedule)
+  window.on('maximize', schedule)
+  window.on('unmaximize', schedule)
+}
+
 function createWindow(): void {
+  const saved = resolveWindowBounds(
+    settingsStore.windowState,
+    screen.getAllDisplays().map((display) => display.workArea)
+  )
   const window = new BrowserWindow({
-    width: 1360,
-    height: 860,
-    minWidth: 720,
-    minHeight: 480,
+    width: DEFAULT_WIDTH,
+    height: DEFAULT_HEIGHT,
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
     show: false,
     backgroundColor: '#0d0f12',
     title: 'AgentGrid',
@@ -131,7 +196,37 @@ function createWindow(): void {
     }
   })
 
-  window.once('ready-to-show', () => window.show())
+  if (settingsStore.windowState) {
+    const position = saved.x !== undefined && saved.y !== undefined ? { x: saved.x, y: saved.y } : {}
+    window.setBounds({ width: saved.width, height: saved.height, ...position })
+    const actual = window.getBounds()
+    const widthError = actual.width - saved.width
+    const heightError = actual.height - saved.height
+    if (widthError !== 0 || heightError !== 0) {
+      window.setBounds({
+        width: saved.width - widthError,
+        height: saved.height - heightError,
+        ...position
+      })
+    }
+  }
+
+  window.once('ready-to-show', () => {
+    if (saved.maximized) window.maximize()
+    window.show()
+  })
+
+  trackWindowState(window)
+
+  let closeApproved = false
+  window.on('close', (event) => {
+    if (closeApproved) return
+    event.preventDefault()
+    void requestRendererFlush().then(() => {
+      closeApproved = true
+      if (!window.isDestroyed()) window.close()
+    })
+  })
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url)
@@ -177,14 +272,18 @@ if (!hasLock) {
     void launchRouter.handle(parseLaunchArgs(argv))
   })
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     app.setAppUserModelId('az.agentgrid.app')
     installSecurityPolicies()
+    startupNotices = (await settingsStore.load()).notices
     registerIpc(() => mainWindow, trustedEntry, {
       terminals,
       getShells,
       listSessions,
-      takePendingLaunch: () => launchRouter.takePending()
+      takePendingLaunch: () => launchRouter.takePending(),
+      loadSettings: loadedSettings,
+      saveSettings: (state) => void settingsStore.save(state),
+      settingsFlushed: () => flushWaiter?.()
     })
     void getShells()
     createWindow()
@@ -196,8 +295,15 @@ if (!hasLock) {
     })
   })
 
-  app.on('before-quit', () => {
+  let settingsFlushedForQuit = false
+  app.on('before-quit', (event) => {
     terminals.killAll()
+    if (settingsFlushedForQuit) return
+    event.preventDefault()
+    void settingsStore.flush().finally(() => {
+      settingsFlushedForQuit = true
+      app.quit()
+    })
   })
 
   app.on('window-all-closed', () => {

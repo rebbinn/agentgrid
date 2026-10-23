@@ -6,6 +6,7 @@ import { Sidebar } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
 import { Toasts } from './components/Toasts'
 import { Workspace } from './components/Workspace'
+import { WorkspaceDialogs } from './components/WorkspaceDialogs'
 import { useLaunchRequests } from './hooks/use-launch-requests'
 import { useCollapseSidebarWhenNarrow } from './hooks/use-narrow-window'
 import { useTerminalStore } from './state/terminal-store'
@@ -28,6 +29,7 @@ export function App() {
       <Workspace />
       <StatusBar />
       <CloseConfirm />
+      <WorkspaceDialogs />
       <Toasts />
     </div>
   )
