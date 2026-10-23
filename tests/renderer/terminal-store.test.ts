@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { resetAppInfoCache } from '../../src/renderer/src/lib/app-info'
 import { resetShellsCache } from '../../src/renderer/src/lib/shells'
-import { nextPaneTitle, useTerminalStore } from '../../src/renderer/src/state/terminal-store'
+import { useLayoutStore } from '../../src/renderer/src/state/layout-store'
+import {
+  MAX_TITLE_LENGTH,
+  clampFontSize,
+  nextPaneTitle,
+  useTerminalStore
+} from '../../src/renderer/src/state/terminal-store'
 import { useUiStore } from '../../src/renderer/src/state/ui-store'
 import { createAgentGridMock, type AgentGridMock } from './agentgrid-mock'
 import { fakeRegistry } from './fake-registry'
@@ -25,6 +31,7 @@ beforeEach(() => {
   resetAppInfoCache()
   fakeRegistry.reset()
   useTerminalStore.setState({ panes: [], activePaneId: null })
+  useLayoutStore.setState({ preset: 'auto', focusMode: false, columnSizes: [], rowSizes: [] })
   useUiStore.setState({ toasts: [], pendingCloseId: null })
 })
 
@@ -219,5 +226,146 @@ describe('restart, close and exit', () => {
     useTerminalStore.getState().clear(first)
     expect(fakeRegistry.get(first)?.clear).toHaveBeenCalled()
     expect(fakeRegistry.get(second)?.clear).not.toHaveBeenCalled()
+  })
+})
+
+describe('naming and ordering panes', () => {
+  function titles(): string[] {
+    return useTerminalStore.getState().panes.map((pane) => pane.title)
+  }
+
+  it('renames a pane, trimming spaces', async () => {
+    const id = await launchPane()
+    useTerminalStore.getState().renamePane(id, '  API server  ')
+    expect(titles()).toEqual(['API server'])
+  })
+
+  it('refuses an empty name and keeps the old one', async () => {
+    const id = await launchPane()
+    useTerminalStore.getState().renamePane(id, '   ')
+    expect(titles()).toEqual(['Command Prompt'])
+  })
+
+  it('cuts very long names', async () => {
+    const id = await launchPane()
+    useTerminalStore.getState().renamePane(id, 'x'.repeat(200))
+    expect(titles()[0]).toHaveLength(MAX_TITLE_LENGTH)
+  })
+
+  it('moves a pane one place earlier or later and stops at the ends', async () => {
+    const first = await launchPane({ shellId: 'cmd' })
+    const second = await launchPane({ shellId: 'powershell' })
+    const third = await launchPane({ shellId: 'cmd' })
+    useTerminalStore.getState().movePane(third, -1)
+    expect(paneIds()).toEqual([first, third, second])
+    useTerminalStore.getState().movePane(first, -1)
+    expect(paneIds()).toEqual([first, third, second])
+    useTerminalStore.getState().movePane(second, 1)
+    expect(paneIds()).toEqual([first, third, second])
+    useTerminalStore.getState().movePane(first, 1)
+    expect(paneIds()).toEqual([third, first, second])
+  })
+
+  it('swaps two panes and ignores unknown ids or the same pane', async () => {
+    const first = await launchPane()
+    const second = await launchPane()
+    useTerminalStore.getState().swapPanes(first, second)
+    expect(paneIds()).toEqual([second, first])
+    useTerminalStore.getState().swapPanes(first, first)
+    useTerminalStore.getState().swapPanes(first, '99999999-9999-4999-8999-999999999999')
+    expect(paneIds()).toEqual([second, first])
+  })
+
+  it('keeps each pane running while it is only moved', async () => {
+    const id = await launchPane()
+    await useTerminalStore.getState().spawnPane(id, 100, 30)
+    const other = await launchPane()
+    useTerminalStore.getState().swapPanes(id, other)
+    expect(useTerminalStore.getState().panes.find((pane) => pane.id === id)?.status).toBe('running')
+    expect(api.terminal.kill).not.toHaveBeenCalled()
+  })
+})
+
+describe('font size', () => {
+  it('starts at the default and steps up and down', async () => {
+    const id = await launchPane()
+    expect(useTerminalStore.getState().panes[0]?.fontSize).toBe(13)
+    useTerminalStore.getState().adjustFontSize(id, 2)
+    expect(useTerminalStore.getState().panes[0]?.fontSize).toBe(15)
+    useTerminalStore.getState().adjustFontSize(id, -1)
+    expect(useTerminalStore.getState().panes[0]?.fontSize).toBe(14)
+  })
+
+  it('stays between 9 and 28', async () => {
+    const id = await launchPane()
+    useTerminalStore.getState().setFontSize(id, 500)
+    expect(useTerminalStore.getState().panes[0]?.fontSize).toBe(28)
+    useTerminalStore.getState().setFontSize(id, -3)
+    expect(useTerminalStore.getState().panes[0]?.fontSize).toBe(9)
+    expect(clampFontSize(12.6)).toBe(13)
+  })
+
+  it('resets to the default', async () => {
+    const id = await launchPane()
+    useTerminalStore.getState().setFontSize(id, 20)
+    useTerminalStore.getState().resetFontSize(id)
+    expect(useTerminalStore.getState().panes[0]?.fontSize).toBe(13)
+  })
+
+  it('only changes the pane it was asked about', async () => {
+    const first = await launchPane()
+    await launchPane()
+    useTerminalStore.getState().setFontSize(first, 20)
+    expect(useTerminalStore.getState().panes.map((pane) => pane.fontSize)).toEqual([20, 13])
+  })
+
+  it('is reachable from the terminal keyboard shortcuts', async () => {
+    const id = await launchPane()
+    const managed = fakeRegistry.get(id)!
+    managed.onZoom(1)
+    managed.onZoom(1)
+    expect(useTerminalStore.getState().panes[0]?.fontSize).toBe(15)
+    managed.onZoom('reset')
+    expect(useTerminalStore.getState().panes[0]?.fontSize).toBe(13)
+  })
+})
+
+describe('focus mode', () => {
+  it('maximizes a pane and makes it active', async () => {
+    const first = await launchPane()
+    await launchPane()
+    useTerminalStore.getState().toggleFocus(first)
+    expect(useLayoutStore.getState().focusMode).toBe(true)
+    expect(useTerminalStore.getState().activePaneId).toBe(first)
+  })
+
+  it('restores the grid when the focused pane is toggled again', async () => {
+    const first = await launchPane()
+    useTerminalStore.getState().toggleFocus(first)
+    useTerminalStore.getState().toggleFocus(first)
+    expect(useLayoutStore.getState().focusMode).toBe(false)
+  })
+
+  it('switches focus to another pane without leaving focus mode', async () => {
+    const first = await launchPane()
+    const second = await launchPane()
+    useTerminalStore.getState().toggleFocus(first)
+    useTerminalStore.getState().toggleFocus(second)
+    expect(useLayoutStore.getState().focusMode).toBe(true)
+    expect(useTerminalStore.getState().activePaneId).toBe(second)
+  })
+
+  it('leaves focus mode when the last pane closes', async () => {
+    const id = await launchPane()
+    useTerminalStore.getState().toggleFocus(id)
+    useTerminalStore.getState().close(id)
+    expect(useLayoutStore.getState().focusMode).toBe(false)
+  })
+
+  it('leaves focus mode when a layout is chosen', async () => {
+    const id = await launchPane()
+    useTerminalStore.getState().toggleFocus(id)
+    useLayoutStore.getState().setPreset('grid-2x2')
+    expect(useLayoutStore.getState().focusMode).toBe(false)
   })
 })

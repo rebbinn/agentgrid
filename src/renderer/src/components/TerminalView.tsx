@@ -32,9 +32,18 @@ export function TerminalView({ id, active }: TerminalViewProps) {
     })
     observer.observe(container)
 
+    const zoomWithWheel = (event: WheelEvent): void => {
+      if (!event.ctrlKey) return
+      event.preventDefault()
+      event.stopPropagation()
+      useTerminalStore.getState().adjustFontSize(id, event.deltaY < 0 ? 1 : -1)
+    }
+    container.addEventListener('wheel', zoomWithWheel, { passive: false, capture: true })
+
     return () => {
       observer.disconnect()
       cancelAnimationFrame(frame)
+      container.removeEventListener('wheel', zoomWithWheel, { capture: true })
       managed.detach()
     }
   }, [id])

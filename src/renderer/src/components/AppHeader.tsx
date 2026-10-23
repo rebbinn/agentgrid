@@ -1,20 +1,15 @@
 import { useProjectPicker } from '../hooks/use-project-picker'
 import { folderName } from '../lib/path'
 import { useProjectStore } from '../state/project-store'
-import { useUiStore } from '../state/ui-store'
 import { strings } from '../strings'
 import { Icon } from './Icon'
+import { LayoutSelector } from './LayoutSelector'
 import { Logo } from './Logo'
 import { NewTerminalButton } from './NewTerminalButton'
 
 export function AppHeader() {
   const projectPath = useProjectStore((state) => state.projectPath)
   const pickProject = useProjectPicker()
-  const pushToast = useUiStore((state) => state.pushToast)
-
-  const layoutNotReady = (): void => {
-    pushToast('warning', strings.pendingLayout)
-  }
 
   return (
     <header className="header">
@@ -39,16 +34,7 @@ export function AppHeader() {
 
         <div className="header__spacer" />
 
-        <button
-          type="button"
-          className="btn"
-          aria-disabled="true"
-          data-tip={strings.pendingLayout}
-          onClick={layoutNotReady}
-        >
-          <Icon name="grid" />
-          {strings.header.layout}
-        </button>
+        <LayoutSelector />
 
         <NewTerminalButton />
       </div>

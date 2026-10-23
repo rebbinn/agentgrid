@@ -4,6 +4,8 @@ export const TERMINAL_FONT_FAMILY =
   "'Cascadia Code', 'Cascadia Mono', 'JetBrains Mono', Consolas, 'Courier New', monospace"
 
 export const DEFAULT_FONT_SIZE = 13
+export const MIN_FONT_SIZE = 9
+export const MAX_FONT_SIZE = 28
 export const SCROLLBACK_LINES = 5000
 
 export const terminalTheme: ITheme = {

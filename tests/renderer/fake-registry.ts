@@ -14,6 +14,8 @@ export interface FakeManaged {
   focus: ReturnType<typeof vi.fn>
   write: ReturnType<typeof vi.fn>
   markExited: ReturnType<typeof vi.fn>
+  setFontSize: ReturnType<typeof vi.fn>
+  onZoom: (step: number | 'reset') => void
 }
 
 const managed = new Map<string, FakeManaged>()
@@ -32,7 +34,9 @@ function createFakeManaged(id: string): FakeManaged {
     clear: vi.fn(),
     focus: vi.fn(),
     write: vi.fn(),
-    markExited: vi.fn()
+    markExited: vi.fn(),
+    setFontSize: vi.fn(),
+    onZoom: () => undefined
   }
 }
 

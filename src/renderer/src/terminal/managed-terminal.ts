@@ -18,10 +18,20 @@ export interface TerminalSize {
   rows: number
 }
 
+export type ZoomStep = number | 'reset'
+
+export function zoomStepForKey(code: string): ZoomStep | null {
+  if (code === 'Equal' || code === 'NumpadAdd') return 1
+  if (code === 'Minus' || code === 'NumpadSubtract') return -1
+  if (code === 'Digit0' || code === 'Numpad0') return 'reset'
+  return null
+}
+
 export class ManagedTerminal {
   readonly term: Terminal
   spawnRequested = false
   alive = false
+  onZoom: (step: ZoomStep) => void = () => undefined
 
   private readonly fitAddon = new FitAddon()
   private container: HTMLElement | null = null
@@ -86,6 +96,12 @@ export class ManagedTerminal {
       this.lastSent = size
     }
     return size
+  }
+
+  setFontSize(size: number): void {
+    if (this.term.options.fontSize === size) return
+    this.term.options.fontSize = size
+    this.fit()
   }
 
   markSpawned(size: TerminalSize): void {
@@ -157,6 +173,13 @@ export class ManagedTerminal {
     }
     if (ctrlOnly && event.code === 'KeyV') return false
     if (ctrlOnly && !event.shiftKey && event.code === 'KeyK') return false
+
+    const zoomStep = ctrlOnly ? zoomStepForKey(event.code) : null
+    if (zoomStep !== null) {
+      event.preventDefault()
+      this.onZoom(zoomStep)
+      return false
+    }
     return true
   }
 

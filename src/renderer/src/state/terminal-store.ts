@@ -4,13 +4,19 @@ import type { ShellInfo, TerminalErrorCode, TerminalExitEvent } from '@shared/ip
 import { getAppInfo } from '../lib/app-info'
 import { getShells, pickDefaultShell } from '../lib/shells'
 import { strings } from '../strings'
+import { DEFAULT_FONT_SIZE, MAX_FONT_SIZE, MIN_FONT_SIZE } from '../terminal/theme'
 import { terminalRegistry } from '../terminal/registry'
+import { useLayoutStore } from './layout-store'
 import { useUiStore } from './ui-store'
+
+export const MAX_TITLE_LENGTH = 40
 
 export type PaneStatus = 'starting' | 'running' | 'exited' | 'error'
 
 export interface Pane {
   id: string
+  seq: number
+  fontSize: number
   title: string
   shellId: string
   shellLabel: string
@@ -38,7 +44,20 @@ interface TerminalState {
   setActive: (id: string) => void
   clear: (id: string) => void
   handleExit: (event: TerminalExitEvent) => void
+  renamePane: (id: string, title: string) => void
+  movePane: (id: string, direction: -1 | 1) => void
+  swapPanes: (firstId: string, secondId: string) => void
+  setFontSize: (id: string, size: number) => void
+  adjustFontSize: (id: string, step: number) => void
+  resetFontSize: (id: string) => void
+  toggleFocus: (id: string) => void
 }
+
+export function clampFontSize(size: number): number {
+  return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(size)))
+}
+
+let nextSeq = 1
 
 export function nextPaneTitle(base: string, existingTitles: readonly string[]): string {
   const used = new Set(existingTitles)
@@ -90,11 +109,25 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
         get().panes.map((pane) => pane.title)
       )
 
-      terminalRegistry.create(id, windowsBuild)
+      const managed = terminalRegistry.create(id, windowsBuild)
+      managed.onZoom = (step) => {
+        if (step === 'reset') get().resetFontSize(id)
+        else get().adjustFontSize(id, step)
+      }
       set((state) => ({
         panes: [
           ...state.panes,
-          { id, title, shellId: shell.id, shellLabel: shell.label, cwd, agentId, status: 'starting' }
+          {
+            id,
+            seq: nextSeq++,
+            fontSize: DEFAULT_FONT_SIZE,
+            title,
+            shellId: shell.id,
+            shellLabel: shell.label,
+            cwd,
+            agentId,
+            status: 'starting'
+          }
         ],
         activePaneId: id
       }))
@@ -157,6 +190,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
       const nextActive =
         activePaneId === id ? (remaining[Math.min(index, remaining.length - 1)]?.id ?? null) : activePaneId
       set({ panes: remaining, activePaneId: nextActive })
+      if (remaining.length === 0) useLayoutStore.getState().setFocusMode(false)
     },
 
     setActive: (id) => {
@@ -170,6 +204,61 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
     handleExit: (event) => {
       if (!findPane(event.id)) return
       updatePane(event.id, { status: 'exited', exitCode: event.exitCode })
+    },
+
+    renamePane: (id, title) => {
+      const trimmed = title.trim().slice(0, MAX_TITLE_LENGTH)
+      if (trimmed.length === 0 || !findPane(id)) return
+      updatePane(id, { title: trimmed })
+    },
+
+    movePane: (id, direction) => {
+      const panes = [...get().panes]
+      const index = panes.findIndex((pane) => pane.id === id)
+      const target = index + direction
+      const current = panes[index]
+      const neighbour = panes[target]
+      if (index === -1 || !current || !neighbour) return
+      panes[index] = neighbour
+      panes[target] = current
+      set({ panes })
+    },
+
+    swapPanes: (firstId, secondId) => {
+      if (firstId === secondId) return
+      const panes = [...get().panes]
+      const first = panes.findIndex((pane) => pane.id === firstId)
+      const second = panes.findIndex((pane) => pane.id === secondId)
+      const firstPane = panes[first]
+      const secondPane = panes[second]
+      if (!firstPane || !secondPane) return
+      panes[first] = secondPane
+      panes[second] = firstPane
+      set({ panes })
+    },
+
+    setFontSize: (id, size) => {
+      if (!findPane(id)) return
+      updatePane(id, { fontSize: clampFontSize(size) })
+    },
+
+    adjustFontSize: (id, step) => {
+      const pane = findPane(id)
+      if (pane) updatePane(id, { fontSize: clampFontSize(pane.fontSize + step) })
+    },
+
+    resetFontSize: (id) => {
+      if (findPane(id)) updatePane(id, { fontSize: DEFAULT_FONT_SIZE })
+    },
+
+    toggleFocus: (id) => {
+      const layout = useLayoutStore.getState()
+      if (layout.focusMode && get().activePaneId === id) {
+        layout.setFocusMode(false)
+        return
+      }
+      get().setActive(id)
+      layout.setFocusMode(true)
     }
   }
 })

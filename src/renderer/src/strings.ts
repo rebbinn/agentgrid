@@ -3,7 +3,46 @@ import type { TerminalErrorCode } from '@shared/ipc'
 export const strings = {
   appName: 'AgentGrid',
   tagline: 'Bir iş sahəsində bir neçə AI agent terminalı',
-  pendingLayout: 'Düzülüş seçimi 4-cü mərhələdə əlavə olunur',
+  layout: {
+    presets: {
+      auto: 'Avtomatik',
+      single: 'Tək terminal',
+      columns: 'İki sütun',
+      rows: 'İki sətir',
+      'grid-2x2': '2 × 2',
+      'grid-3x2': '3 × 2',
+      'grid-2x3': '2 × 3'
+    },
+    hints: {
+      auto: 'Panel sayına görə böyüyür',
+      single: '1 sütun · 1 sətir',
+      columns: '2 sütun · 1 sətir',
+      rows: '1 sütun · 2 sətir',
+      'grid-2x2': '2 sütun · 2 sətir',
+      'grid-3x2': '3 sütun · 2 sətir',
+      'grid-2x3': '2 sütun · 3 sətir'
+    },
+    focus: 'Fokus rejimi',
+    focusHint: 'Aktiv terminal bütün sahəni tutur',
+    overflow: 'Seçilmiş düzülüş panel sayına çatmır, avtomatik böyüdüldü',
+    columnSplitter: (index: number) => `Sütun ayırıcısı ${index}`,
+    rowSplitter: (index: number) => `Sətir ayırıcısı ${index}`,
+    tabs: 'Terminallar',
+    emptySlot: 'Boş yuva'
+  },
+  pane: {
+    maximize: 'Böyüt',
+    restore: 'Bərpa et',
+    menu: 'Panel əməliyyatları',
+    rename: 'Adı dəyişdir',
+    renameLabel: 'Terminalın adı',
+    moveEarlier: 'Əvvələ çək',
+    moveLater: 'Sonraya çək',
+    fontLarger: 'Şrifti böyüt',
+    fontSmaller: 'Şrifti kiçilt',
+    fontReset: 'Şrift ölçüsünü sıfırla',
+    fontSize: (size: number) => `Şrift: ${size}`
+  },
   header: {
     openProject: 'Layihə qovluğu seç',
     noProject: 'Layihə seçilməyib',
@@ -33,7 +72,9 @@ export const strings = {
   status: {
     terminals: (count: number) => `${count} terminal`,
     ready: 'Hazır',
-    active: (title: string) => `Aktiv: ${title}`
+    active: (title: string) => `Aktiv: ${title}`,
+    grid: (columns: number, rows: number) => `${columns} × ${rows}`,
+    focus: 'Fokus'
   },
   terminal: {
     launchFailed: 'Terminal açmaq alınmadı',
