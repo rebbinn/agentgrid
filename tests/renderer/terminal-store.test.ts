@@ -229,6 +229,24 @@ describe('restart, close and exit', () => {
   })
 })
 
+describe('long titles for resumed chats', () => {
+  it('cuts a long title at the limit and marks it with an ellipsis', async () => {
+    await useTerminalStore.getState().launch({
+      cwd: 'C:\\work',
+      agentId: 'claude',
+      title: `Claude · ${'söz '.repeat(30)}`
+    })
+    const title = useTerminalStore.getState().panes[0]!.title
+    expect(title.length).toBeLessThanOrEqual(MAX_TITLE_LENGTH)
+    expect(title.endsWith('…')).toBe(true)
+  })
+
+  it('leaves short titles untouched', async () => {
+    await useTerminalStore.getState().launch({ cwd: 'C:\\work', agentId: 'claude', title: 'Claude · fix' })
+    expect(useTerminalStore.getState().panes[0]!.title).toBe('Claude · fix')
+  })
+})
+
 describe('naming and ordering panes', () => {
   function titles(): string[] {
     return useTerminalStore.getState().panes.map((pane) => pane.title)

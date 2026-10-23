@@ -22,6 +22,7 @@ export interface Pane {
   shellLabel: string
   cwd: string
   agentId?: AgentId
+  resumeSessionId?: string
   status: PaneStatus
   exitCode?: number
   errorCode?: TerminalErrorCode
@@ -32,6 +33,8 @@ export interface LaunchOptions {
   cwd: string
   agentId?: AgentId
   shellId?: string
+  resumeSessionId?: string
+  title?: string
 }
 
 interface TerminalState {
@@ -59,6 +62,10 @@ export function clampFontSize(size: number): number {
 
 let nextSeq = 1
 
+export function shortenTitle(title: string): string {
+  return title.length > MAX_TITLE_LENGTH ? `${title.slice(0, MAX_TITLE_LENGTH - 1).trimEnd()}…` : title
+}
+
 export function nextPaneTitle(base: string, existingTitles: readonly string[]): string {
   const used = new Set(existingTitles)
   for (let index = 1; ; index++) {
@@ -82,7 +89,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
     panes: [],
     activePaneId: null,
 
-    launch: async ({ cwd, agentId, shellId }) => {
+    launch: async ({ cwd, agentId, shellId, resumeSessionId, title: requestedTitle }) => {
       const pushToast = useUiStore.getState().pushToast
       let shells: ShellInfo[]
       let windowsBuild: number
@@ -103,7 +110,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
       }
 
       const id = crypto.randomUUID()
-      const base = agentId ? findAgent(agentId).label : shell.label
+      const base = shortenTitle(requestedTitle ?? (agentId ? findAgent(agentId).label : shell.label))
       const title = nextPaneTitle(
         base,
         get().panes.map((pane) => pane.title)
@@ -126,6 +133,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
             shellLabel: shell.label,
             cwd,
             agentId,
+            resumeSessionId,
             status: 'starting'
           }
         ],
@@ -141,7 +149,15 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
       updatePane(id, { status: 'starting', errorCode: undefined, errorDetail: undefined })
 
       const result = await window.agentgrid.terminal
-        .create({ id, shellId: pane.shellId, cwd: pane.cwd, agentId: pane.agentId, cols, rows })
+        .create({
+          id,
+          shellId: pane.shellId,
+          cwd: pane.cwd,
+          agentId: pane.agentId,
+          resumeSessionId: pane.resumeSessionId,
+          cols,
+          rows
+        })
         .catch((error: unknown) => ({
           ok: false as const,
           code: 'spawn-failed' as const,

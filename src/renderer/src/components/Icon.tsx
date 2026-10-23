@@ -9,6 +9,7 @@ const PATHS = {
   restart: 'M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7',
   clear: 'M21 5H9l-6 7 6 7h12zM13 9l4 6M17 9l-4 6',
   chevron: 'M6 9l6 6 6-6',
+  history: 'M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l3 2',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
   maximize: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
   restore: 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5'

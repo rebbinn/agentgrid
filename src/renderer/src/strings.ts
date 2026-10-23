@@ -55,7 +55,39 @@ export const strings = {
     claudeTip: 'Claude — yeni CMD-də işə sal',
     toggleSidebar: 'Yan paneli göstər / gizlət'
   },
+  time: {
+    now: 'indicə',
+    minutes: (count: number) => `${count} dəq əvvəl`,
+    hours: (count: number) => `${count} saat əvvəl`,
+    yesterday: 'dünən',
+    days: (count: number) => `${count} gün əvvəl`
+  },
+  sessions: {
+    tab: 'Söhbətlər',
+    tabClose: 'Söhbətlər tabını bağla',
+    tablist: 'Yan panelin bölmələri',
+    railTip: 'Claude söhbətləri',
+    scopeLabel: 'Hansı söhbətlər göstərilsin',
+    scopeProject: 'Bu layihə',
+    scopeAll: 'Bütün layihələr',
+    searchLabel: 'Söhbətlərdə axtar',
+    searchPlaceholder: 'Axtar…',
+    refresh: 'Siyahını yenilə',
+    loading: 'Yüklənir…',
+    loadFailed: 'Söhbətlər oxuna bilmədi.',
+    retry: 'Yenidən cəhd et',
+    emptyProject: 'Bu layihədə köhnə Claude söhbəti yoxdur.',
+    emptyAll: 'Heç bir Claude söhbəti tapılmadı.',
+    emptySearch: 'Axtarışa uyğun söhbət yoxdur.',
+    hint: 'Ctrl+A: bütün layihələrə keç',
+    listLabel: 'Claude söhbətləri',
+    open: (title: string) => `Söhbəti aç: ${title}`,
+    alreadyOpen: 'Bu söhbət artıq açıqdır, ona keçdim.',
+    paneTitle: (title: string) => `Claude · ${title}`,
+    count: (count: number) => `${count} söhbət`
+  },
   sidebar: {
+    tabProjects: 'Layihə',
     project: 'Layihə',
     recent: 'Son açılanlar',
     noRecent: 'Hələ başqa layihə açılmayıb.'

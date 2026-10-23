@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, session, shell } from 'electron'
 import { spawn as spawnPty } from 'node-pty'
+import { listClaudeSessions } from './claude-sessions'
 import { findOnPath } from './executables'
 import { registerIpc } from './ipc'
 import {
@@ -24,6 +25,12 @@ const trustedEntry: TrustedEntry = {
 }
 
 let mainWindow: BrowserWindow | null = null
+
+function claudeProjectsRoot(): string {
+  const override = process.env['AGENTGRID_CLAUDE_PROJECTS_DIR']
+  if (override && !app.isPackaged) return override
+  return join(app.getPath('home'), '.claude', 'projects')
+}
 
 const discoveryDeps = createShellDiscoveryDeps()
 let shellsPromise: Promise<ShellDefinition[]> | null = null
@@ -139,7 +146,11 @@ if (!hasLock) {
   app.whenReady().then(() => {
     app.setAppUserModelId('az.agentgrid.app')
     installSecurityPolicies()
-    registerIpc(() => mainWindow, trustedEntry, { terminals, getShells })
+    registerIpc(() => mainWindow, trustedEntry, {
+      terminals,
+      getShells,
+      listSessions: () => listClaudeSessions(claudeProjectsRoot())
+    })
     void getShells()
     createWindow()
 

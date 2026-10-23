@@ -12,6 +12,7 @@ export const IpcChannel = {
   terminalKill: 'terminal:kill',
   terminalData: 'terminal:data',
   terminalExit: 'terminal:exit',
+  sessionsList: 'sessions:list',
   clipboardRead: 'clipboard:read',
   clipboardWrite: 'clipboard:write',
   externalOpen: 'external:open'
@@ -52,15 +53,29 @@ const TerminalIdSchema = z.uuid()
 const ColsSchema = z.number().int().min(1).max(MAX_COLS)
 const RowsSchema = z.number().int().min(1).max(MAX_ROWS)
 
-export const TerminalCreateRequestSchema = z.object({
-  id: TerminalIdSchema,
-  shellId: z.string().min(1).max(128),
-  cwd: z.string().min(1).max(1024),
-  agentId: z.enum(AGENT_IDS).optional(),
-  cols: ColsSchema,
-  rows: RowsSchema
-})
+export const TerminalCreateRequestSchema = z
+  .object({
+    id: TerminalIdSchema,
+    shellId: z.string().min(1).max(128),
+    cwd: z.string().min(1).max(1024),
+    agentId: z.enum(AGENT_IDS).optional(),
+    resumeSessionId: z.uuid().optional(),
+    cols: ColsSchema,
+    rows: RowsSchema
+  })
+  .refine((request) => request.resumeSessionId === undefined || request.agentId === 'claude', {
+    message: 'Only Claude sessions can be resumed'
+  })
 export type TerminalCreateRequest = z.infer<typeof TerminalCreateRequestSchema>
+
+export const ClaudeSessionSchema = z.object({
+  id: z.uuid(),
+  title: z.string().min(1).max(300),
+  cwd: z.string().min(1).max(1024),
+  modifiedAt: z.number().int().nonnegative()
+})
+export type ClaudeSession = z.infer<typeof ClaudeSessionSchema>
+export const ClaudeSessionListSchema = z.array(ClaudeSessionSchema)
 
 export const TERMINAL_ERROR_CODES = [
   'cwd-missing',
@@ -134,6 +149,9 @@ export interface AgentGridApi {
     kill(id: string): void
     onData(listener: (event: TerminalDataEvent) => void): () => void
     onExit(listener: (event: TerminalExitEvent) => void): () => void
+  }
+  sessions: {
+    list(): Promise<ClaudeSession[]>
   }
   clipboard: {
     readText(): Promise<string>

@@ -124,6 +124,33 @@ describe('TerminalService.create', () => {
     expect(pty.written).toEqual(['claude\r'])
   })
 
+  it('resumes an old Claude chat by typing claude --resume with its id', async () => {
+    const { service, pty } = harness()
+    const sessionId = '3975237b-df03-44fe-b8e1-be208c6646d1'
+    await service.create({ ...request, agentId: 'claude', resumeSessionId: sessionId })
+    expect(pty.written).toEqual([`claude --resume ${sessionId}\r`])
+  })
+
+  it('refuses to resume anything but a Claude chat', async () => {
+    const { service, spawn } = harness()
+    const sessionId = '3975237b-df03-44fe-b8e1-be208c6646d1'
+    expect(await service.create({ ...request, resumeSessionId: sessionId })).toMatchObject({
+      ok: false,
+      code: 'spawn-failed'
+    })
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it.each(['x; calc', '..\\..\\evil', '3975237b-df03-44fe-b8e1-be208c6646d1 && del *', '', 'not-an-id'])(
+    'never lets %j reach the command line',
+    async (resumeSessionId) => {
+      const { service, spawn } = harness()
+      const result = await service.create({ ...request, agentId: 'claude', resumeSessionId })
+      expect(result).toMatchObject({ ok: false, code: 'spawn-failed' })
+      expect(spawn).not.toHaveBeenCalled()
+    }
+  )
+
   it('does not type anything for a plain terminal', async () => {
     const { service, pty } = harness()
     await service.create(request)

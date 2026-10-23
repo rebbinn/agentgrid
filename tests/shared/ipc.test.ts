@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AppInfoSchema,
+  ClaudeSessionListSchema,
   ClipboardWriteSchema,
   MAX_WRITE_CHARS,
   ProjectPickResultSchema,
@@ -59,6 +60,29 @@ describe('terminal request validation', () => {
     ['a command string is smuggled in as a property type', { shellId: ['cmd'] }]
   ])('rejects a create request when %s', (_name, patch) => {
     expect(TerminalCreateRequestSchema.safeParse({ ...validCreate, ...patch }).success).toBe(false)
+  })
+
+  it('accepts a resume request only for Claude and only with a real id', () => {
+    const sessionId = '3975237b-df03-44fe-b8e1-be208c6646d1'
+    const resume = { ...validCreate, agentId: 'claude', resumeSessionId: sessionId }
+    expect(TerminalCreateRequestSchema.safeParse(resume).success).toBe(true)
+    expect(TerminalCreateRequestSchema.safeParse({ ...resume, agentId: 'codex' }).success).toBe(false)
+    expect(TerminalCreateRequestSchema.safeParse({ ...validCreate, resumeSessionId: sessionId }).success).toBe(false)
+    expect(TerminalCreateRequestSchema.safeParse({ ...resume, resumeSessionId: 'x; calc' }).success).toBe(false)
+  })
+
+  it('validates the list of old chats coming from the main process', () => {
+    const session = {
+      id: '3975237b-df03-44fe-b8e1-be208c6646d1',
+      title: 'Fix login',
+      cwd: 'C:\\work',
+      modifiedAt: 1790000000000
+    }
+    expect(ClaudeSessionListSchema.safeParse([session]).success).toBe(true)
+    expect(ClaudeSessionListSchema.safeParse([{ ...session, id: 'nope' }]).success).toBe(false)
+    expect(ClaudeSessionListSchema.safeParse([{ ...session, title: '' }]).success).toBe(false)
+    expect(ClaudeSessionListSchema.safeParse([{ ...session, modifiedAt: -1 }]).success).toBe(false)
+    expect(ClaudeSessionListSchema.safeParse('x').success).toBe(false)
   })
 
   it('limits how much text one write can carry', () => {

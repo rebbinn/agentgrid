@@ -9,11 +9,14 @@ import { strings } from '../strings'
 export interface LaunchRequest {
   agentId?: AgentId
   shellId?: string
+  cwd?: string
+  resumeSessionId?: string
+  title?: string
 }
 
 export function useLaunch(): (request?: LaunchRequest) => Promise<void> {
   return useCallback(async (request = {}) => {
-    let cwd = useProjectStore.getState().projectPath
+    let cwd = request.cwd ?? useProjectStore.getState().projectPath
     if (!cwd) {
       try {
         cwd = (await getAppInfo()).homeDir
@@ -22,6 +25,6 @@ export function useLaunch(): (request?: LaunchRequest) => Promise<void> {
         return
       }
     }
-    await useTerminalStore.getState().launch({ cwd, ...request })
+    await useTerminalStore.getState().launch({ ...request, cwd })
   }, [])
 }

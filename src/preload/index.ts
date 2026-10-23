@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import {
   AppInfoSchema,
+  ClaudeSessionListSchema,
   IpcChannel,
   ProjectPickResultSchema,
   ShellListSchema,
@@ -46,6 +47,9 @@ const api: AgentGridApi = {
       subscribe(IpcChannel.terminalData, (payload) => TerminalDataEventSchema.parse(payload), listener),
     onExit: (listener) =>
       subscribe(IpcChannel.terminalExit, (payload) => TerminalExitEventSchema.parse(payload), listener)
+  },
+  sessions: {
+    list: async () => ClaudeSessionListSchema.parse(await ipcRenderer.invoke(IpcChannel.sessionsList))
   },
   clipboard: {
     readText: async () => String(await ipcRenderer.invoke(IpcChannel.clipboardRead)),

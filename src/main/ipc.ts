@@ -19,6 +19,7 @@ import {
   TerminalResizeSchema,
   TerminalWriteSchema,
   type AppInfo,
+  type ClaudeSession,
   type ProjectPickResult,
   type ShellInfo,
   type TerminalCreateResult
@@ -30,6 +31,7 @@ import type { TerminalService } from './terminal-service'
 export interface IpcServices {
   terminals: TerminalService
   getShells(): Promise<ShellDefinition[]>
+  listSessions(): Promise<ClaudeSession[]>
 }
 
 function windowsBuildNumber(): number {
@@ -111,6 +113,11 @@ export function registerIpc(
     if (!isTrusted(event)) return
     const parsed = TerminalKillSchema.safeParse(payload)
     if (parsed.success) services.terminals.kill(parsed.data.id)
+  })
+
+  ipcMain.handle(IpcChannel.sessionsList, async (event): Promise<ClaudeSession[]> => {
+    guard(event)
+    return services.listSessions()
   })
 
   ipcMain.handle(IpcChannel.clipboardRead, async (event): Promise<string> => {

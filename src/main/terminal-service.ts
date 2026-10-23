@@ -35,6 +35,8 @@ export interface TerminalServiceDeps {
   emitExit(event: TerminalExitEvent): void
 }
 
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export const FLUSH_DELAY_MS = 6
 export const FLUSH_SIZE_CHARS = 64 * 1024
 export const PAUSE_ABOVE_UNACKED = 512 * 1024
@@ -89,6 +91,12 @@ export class TerminalService {
     }
 
     const agent = request.agentId ? findAgent(request.agentId) : null
+    if (
+      request.resumeSessionId !== undefined &&
+      (agent?.id !== 'claude' || !SESSION_ID.test(request.resumeSessionId))
+    ) {
+      return { ok: false, code: 'spawn-failed', message: 'Only a Claude session id can be resumed' }
+    }
     if (agent && shell.kind !== 'wsl' && !this.deps.findExecutable(agent.command)) {
       return { ok: false, code: 'agent-missing', message: agent.command }
     }
@@ -112,7 +120,10 @@ export class TerminalService {
     pty.onData((data) => this.handleData(request.id, entry, data))
     pty.onExit((event) => this.handleExit(request.id, entry, event))
 
-    if (agent) pty.write(`${agent.command}\r`)
+    if (agent) {
+      const resume = request.resumeSessionId ? ` --resume ${request.resumeSessionId}` : ''
+      pty.write(`${agent.command}${resume}\r`)
+    }
 
     return {
       ok: true,
