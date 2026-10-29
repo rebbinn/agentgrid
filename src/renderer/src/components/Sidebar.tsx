@@ -6,6 +6,7 @@ import { requestWorkspaceSwitch } from '../state/workspace-actions'
 import { useWorkspaceStore } from '../state/workspace-store'
 import { strings } from '../strings'
 import { Icon } from './Icon'
+import { PresetsSection } from './PresetsSection'
 import { SessionsPanel } from './SessionsPanel'
 
 function WorkspacesSection() {
@@ -61,6 +62,7 @@ function ProjectsPanel() {
   return (
     <>
       <WorkspacesSection />
+      <PresetsSection />
       <section className="sidebar__section">
         <h2 className="sidebar__title">{strings.sidebar.project}</h2>
         {projectPath ? (

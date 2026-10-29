@@ -6,6 +6,7 @@ import { strings } from '../strings'
 import { ClaudeLogo } from './ClaudeLogo'
 import { Icon } from './Icon'
 import { PaneGrid } from './PaneGrid'
+import { SendPanel } from './SendPanel'
 
 export function Workspace() {
   const projectPath = useProjectStore((state) => state.projectPath)
@@ -16,7 +17,10 @@ export function Workspace() {
   if (hasPanes) {
     return (
       <main className="workspace">
-        <PaneGrid />
+        <div className="workspace__stack">
+          <PaneGrid />
+          <SendPanel />
+        </div>
       </main>
     )
   }

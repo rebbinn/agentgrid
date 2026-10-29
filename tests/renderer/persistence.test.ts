@@ -179,7 +179,13 @@ describe('restoring on start', () => {
   it('applies the saved interface preferences', async () => {
     api.settings.load.mockResolvedValue(
       loaded({
-        preferences: { sidebarOpen: false, sidebarTab: 'sessions', sessionsTabOpen: true, sessionsShowAll: true }
+        preferences: {
+          ...defaultAppState().preferences,
+          sidebarOpen: false,
+          sidebarTab: 'sessions',
+          sessionsTabOpen: true,
+          sessionsShowAll: true
+        }
       })
     )
     await restoreSession()
@@ -190,7 +196,13 @@ describe('restoring on start', () => {
   it('does not open the sessions tab as the active one if the tab itself is closed', async () => {
     api.settings.load.mockResolvedValue(
       loaded({
-        preferences: { sidebarOpen: true, sidebarTab: 'sessions', sessionsTabOpen: false, sessionsShowAll: false }
+        preferences: {
+          ...defaultAppState().preferences,
+          sidebarOpen: true,
+          sidebarTab: 'sessions',
+          sessionsTabOpen: false,
+          sessionsShowAll: false
+        }
       })
     )
     await restoreSession()
@@ -294,7 +306,9 @@ describe('saving', () => {
       sidebarOpen: true,
       sidebarTab: 'sessions',
       sessionsTabOpen: true,
-      sessionsShowAll: true
+      sessionsShowAll: true,
+      defaultFontSize: 13,
+      defaultShellId: null
     })
   })
 

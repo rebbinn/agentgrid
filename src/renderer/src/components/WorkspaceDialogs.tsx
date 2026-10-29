@@ -45,6 +45,15 @@ export function WorkspaceDialogs() {
     )
   }
 
+  if (
+    dialog.kind === 'settings' ||
+    dialog.kind === 'launch' ||
+    dialog.kind === 'preset-editor' ||
+    dialog.kind === 'delete-preset'
+  ) {
+    return null
+  }
+
   const target = workspaces.find((item) => item.id === dialog.id)
   if (!target) return null
 

@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, BrowserWindow, screen, session, shell } from 'electron'
+import { app, BrowserWindow, Menu, screen, session, shell } from 'electron'
 import { spawn as spawnPty } from 'node-pty'
 import { listClaudeSessions } from './claude-sessions'
 import { findOnPath } from './executables'
@@ -25,6 +25,7 @@ import {
   MIN_WIDTH,
   resolveWindowBounds
 } from './window-state'
+import { findAgent } from '@shared/agents'
 import { IpcChannel } from '@shared/ipc'
 import { toAppState, type LoadedSettings, type SettingsNotice } from '@shared/settings'
 
@@ -274,12 +275,18 @@ if (!hasLock) {
 
   app.whenReady().then(async () => {
     app.setAppUserModelId('az.agentgrid.app')
+    Menu.setApplicationMenu(null)
     installSecurityPolicies()
     startupNotices = (await settingsStore.load()).notices
     registerIpc(() => mainWindow, trustedEntry, {
       terminals,
       getShells,
       listSessions,
+      agentStatus: () => ({
+        claude: findOnPath(findAgent('claude').command, discoveryDeps) !== null,
+        codex: findOnPath(findAgent('codex').command, discoveryDeps) !== null,
+        gemini: findOnPath(findAgent('gemini').command, discoveryDeps) !== null
+      }),
       takePendingLaunch: () => launchRouter.takePending(),
       loadSettings: loadedSettings,
       saveSettings: (state) => void settingsStore.save(state),

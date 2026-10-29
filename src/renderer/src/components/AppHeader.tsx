@@ -1,4 +1,6 @@
+import { togglePalette } from '../commands/actions'
 import { useProjectPicker } from '../hooks/use-project-picker'
+import { formatShortcut, withShortcut } from '../lib/shortcuts'
 import { folderName } from '../lib/path'
 import { useProjectStore } from '../state/project-store'
 import { strings } from '../strings'
@@ -36,6 +38,18 @@ export function AppHeader() {
         </button>
 
         <div className="header__spacer" />
+
+        <button
+          type="button"
+          className="btn btn--ghost palette-button"
+          aria-label={strings.palette.open}
+          data-tip={withShortcut(strings.palette.label, 'palette')}
+          onClick={togglePalette}
+        >
+          <Icon name="search" size={14} />
+          <span className="palette-button__text">{strings.palette.open}</span>
+          <kbd className="palette__key">{formatShortcut('palette')}</kbd>
+        </button>
 
         <LayoutSelector />
 

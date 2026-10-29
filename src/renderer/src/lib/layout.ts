@@ -90,3 +90,44 @@ export function boundaryOffsets(fractions: readonly number[]): number[] {
 export function slotPosition(index: number, columns: number): { column: number; row: number } {
   return { column: (index % columns) + 1, row: Math.floor(index / columns) + 1 }
 }
+
+export interface PaneCell {
+  column: number
+  row: number
+  span: number
+}
+
+function usedRowCount(paneCount: number, columns: number): number {
+  return Math.max(1, Math.ceil(paneCount / columns))
+}
+
+export function paneCell(index: number, columns: number, paneCount: number): PaneCell {
+  const { column, row } = slotPosition(index, columns)
+  const lastRowCount = paneCount - (usedRowCount(paneCount, columns) - 1) * columns
+  const isLastPane = index === paneCount - 1
+  const span = isLastPane && lastRowCount < columns ? columns - lastRowCount + 1 : 1
+  return { column, row, span }
+}
+
+export function emptyRowSlots(
+  paneCount: number,
+  columns: number,
+  slots: number
+): Array<{ column: number; row: number }> {
+  const firstEmpty = usedRowCount(paneCount, columns) * columns
+  return Array.from({ length: Math.max(0, slots - firstEmpty) }, (_, offset) =>
+    slotPosition(firstEmpty + offset, columns)
+  )
+}
+
+export function verticalSplitterExtent(
+  boundaryIndex: number,
+  paneCount: number,
+  columns: number,
+  rowFractions: readonly number[]
+): number {
+  const rowsUsed = usedRowCount(paneCount, columns)
+  const lastRowCount = paneCount - (rowsUsed - 1) * columns
+  if (lastRowCount >= boundaryIndex + 2) return 1
+  return rowFractions.slice(0, rowsUsed - 1).reduce((sum, fraction) => sum + fraction, 0)
+}

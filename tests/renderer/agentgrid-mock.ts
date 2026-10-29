@@ -34,6 +34,7 @@ export function createAgentGridMock() {
       onExit: vi.fn(() => () => undefined)
     },
     sessions: { list: vi.fn().mockResolvedValue([]) },
+    agents: { status: vi.fn().mockResolvedValue({ claude: true, codex: false, gemini: false }) },
     settings: {
       load: vi.fn().mockResolvedValue({ state: defaultAppState(), notices: [] }),
       save: vi.fn(),

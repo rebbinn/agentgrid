@@ -8,6 +8,10 @@ export type AppDialog =
   | { kind: 'rename-workspace'; id: string }
   | { kind: 'delete-workspace'; id: string }
   | { kind: 'switch-workspace'; id: string }
+  | { kind: 'settings' }
+  | { kind: 'launch' }
+  | { kind: 'preset-editor'; id: string | null }
+  | { kind: 'delete-preset'; id: string }
 
 export interface Toast {
   id: number
@@ -22,6 +26,15 @@ interface UiState {
   toasts: Toast[]
   pendingCloseId: string | null
   dialog: AppDialog | null
+  paletteOpen: boolean
+  sendPanelOpen: boolean
+  sendDraft: string
+  renameRequestId: string | null
+  setPaletteOpen: (open: boolean) => void
+  setSendPanelOpen: (open: boolean) => void
+  setSendDraft: (draft: string) => void
+  requestRename: (id: string) => void
+  clearRenameRequest: () => void
   openDialog: (dialog: AppDialog) => void
   closeDialog: () => void
   askToClose: (id: string) => void
@@ -44,6 +57,15 @@ export const useUiStore = create<UiState>((set) => ({
   toasts: [],
   pendingCloseId: null,
   dialog: null,
+  paletteOpen: false,
+  sendPanelOpen: false,
+  sendDraft: '',
+  renameRequestId: null,
+  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  setSendPanelOpen: (sendPanelOpen) => set({ sendPanelOpen }),
+  setSendDraft: (sendDraft) => set({ sendDraft }),
+  requestRename: (renameRequestId) => set({ renameRequestId }),
+  clearRenameRequest: () => set({ renameRequestId: null }),
   openDialog: (dialog) => set({ dialog }),
   closeDialog: () => set({ dialog: null }),
   askToClose: (id) => set({ pendingCloseId: id }),

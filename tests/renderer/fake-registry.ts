@@ -15,6 +15,7 @@ export interface FakeManaged {
   write: ReturnType<typeof vi.fn>
   markExited: ReturnType<typeof vi.fn>
   setFontSize: ReturnType<typeof vi.fn>
+  sendText: ReturnType<typeof vi.fn>
   onZoom: (step: number | 'reset') => void
 }
 
@@ -36,6 +37,7 @@ function createFakeManaged(id: string): FakeManaged {
     write: vi.fn(),
     markExited: vi.fn(),
     setFontSize: vi.fn(),
+    sendText: vi.fn(() => true),
     onZoom: () => undefined
   }
 }

@@ -1,14 +1,17 @@
 import { create } from 'zustand'
 import { findAgent, type AgentId } from '@shared/agents'
 import type { ShellInfo, TerminalErrorCode, TerminalExitEvent } from '@shared/ipc'
-import type { SavedPane } from '@shared/settings'
+import type { PresetKind, SavedPane } from '@shared/settings'
 import { getAppInfo } from '../lib/app-info'
+import { clampFontSize } from '../lib/font-size'
 import { getShells, pickDefaultShell } from '../lib/shells'
 import { strings } from '../strings'
-import { DEFAULT_FONT_SIZE, MAX_FONT_SIZE, MIN_FONT_SIZE } from '../terminal/theme'
 import { terminalRegistry } from '../terminal/registry'
 import { useLayoutStore } from './layout-store'
+import { usePrefsStore } from './prefs-store'
 import { useUiStore } from './ui-store'
+
+export { clampFontSize }
 
 export const MAX_TITLE_LENGTH = 40
 
@@ -24,6 +27,8 @@ export interface Pane {
   cwd: string
   agentId?: AgentId
   resumeSessionId?: string
+  startupCommand?: string
+  commandKind?: PresetKind
   status: PaneStatus
   exitCode?: number
   errorCode?: TerminalErrorCode
@@ -35,6 +40,8 @@ export interface LaunchOptions {
   agentId?: AgentId
   shellId?: string
   resumeSessionId?: string
+  startupCommand?: string
+  commandKind?: PresetKind
   title?: string
 }
 
@@ -72,14 +79,12 @@ export function capturePanes(): { panes: SavedPane[]; activePane: number | null 
       cwd: pane.cwd,
       fontSize: pane.fontSize,
       ...(pane.agentId ? { agentId: pane.agentId } : {}),
-      ...(pane.resumeSessionId ? { resumeSessionId: pane.resumeSessionId } : {})
+      ...(pane.resumeSessionId ? { resumeSessionId: pane.resumeSessionId } : {}),
+      ...(pane.startupCommand ? { startupCommand: pane.startupCommand } : {}),
+      ...(pane.commandKind ? { commandKind: pane.commandKind } : {})
     })),
     activePane: activeIndex === -1 ? null : activeIndex
   }
-}
-
-export function clampFontSize(size: number): number {
-  return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(size)))
 }
 
 let nextSeq = 1
@@ -111,7 +116,15 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
     panes: [],
     activePaneId: null,
 
-    launch: async ({ cwd, agentId, shellId, resumeSessionId, title: requestedTitle }) => {
+    launch: async ({
+      cwd,
+      agentId,
+      shellId,
+      resumeSessionId,
+      startupCommand,
+      commandKind,
+      title: requestedTitle
+    }) => {
       const pushToast = useUiStore.getState().pushToast
       let shells: ShellInfo[]
       let windowsBuild: number
@@ -125,9 +138,9 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
 
       const shell = shellId
         ? (shells.find((candidate) => candidate.id === shellId) ?? null)
-        : pickDefaultShell(shells)
+        : pickDefaultShell(shells, usePrefsStore.getState().defaultShellId)
       if (!shell) {
-        pushToast('error', strings.terminal.noShell)
+        pushToast('error', shellId ? strings.terminal.shellGone(shellId) : strings.terminal.noShell)
         return null
       }
 
@@ -149,13 +162,15 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
           {
             id,
             seq: nextSeq++,
-            fontSize: DEFAULT_FONT_SIZE,
+            fontSize: usePrefsStore.getState().defaultFontSize,
             title,
             shellId: shell.id,
             shellLabel: shell.label,
             cwd,
             agentId,
             resumeSessionId,
+            startupCommand,
+            commandKind,
             status: 'starting'
           }
         ],
@@ -177,6 +192,8 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
           cwd: pane.cwd,
           agentId: pane.agentId,
           resumeSessionId: pane.resumeSessionId,
+          startupCommand: pane.startupCommand,
+          requireInstalled: pane.commandKind === 'agent' ? true : undefined,
           cols,
           rows
         })
@@ -262,6 +279,8 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
           cwd: entry.cwd,
           agentId: entry.agentId,
           resumeSessionId: entry.resumeSessionId,
+          startupCommand: entry.startupCommand,
+          commandKind: entry.commandKind,
           status: 'idle'
         }
       })
@@ -346,7 +365,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
     },
 
     resetFontSize: (id) => {
-      if (findPane(id)) updatePane(id, { fontSize: DEFAULT_FONT_SIZE })
+      if (findPane(id)) updatePane(id, { fontSize: usePrefsStore.getState().defaultFontSize })
     },
 
     toggleFocus: (id) => {

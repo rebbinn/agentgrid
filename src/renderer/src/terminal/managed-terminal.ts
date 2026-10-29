@@ -119,6 +119,14 @@ export class ManagedTerminal {
     })
   }
 
+  sendText(text: string, execute: boolean): boolean {
+    if (!this.alive) return false
+    const body = text.replace(/[\r\n]+$/, '')
+    if (body.length > 0) this.term.paste(body)
+    if (execute) window.agentgrid.terminal.write(this.id, '\r')
+    return true
+  }
+
   markExited(exitCode: number): void {
     this.alive = false
     this.term.write(`\r\n\x1b[2m[Proses bitdi, çıxış kodu ${exitCode}]\x1b[0m\r\n`)

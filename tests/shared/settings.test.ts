@@ -14,6 +14,16 @@ import {
 const ID_A = '11111111-1111-4111-8111-111111111111'
 const ID_B = '22222222-2222-4222-8222-222222222222'
 const SESSION = '3975237b-df03-44fe-b8e1-be208c6646d1'
+const PRESET_ID = '44444444-4444-4444-8444-444444444444'
+
+const preset = {
+  id: PRESET_ID,
+  name: 'Dev server',
+  kind: 'command' as const,
+  command: 'npm run dev',
+  shellId: 'cmd',
+  cwd: null
+}
 
 function workspace(id: string, overrides: Partial<Workspace> = {}): Workspace {
   return {
@@ -143,6 +153,116 @@ describe('parseSettings', () => {
   })
 })
 
+describe('presets and the newer preferences', () => {
+  it('reads saved presets', () => {
+    const outcome = parseSettings(raw({ presets: [preset] }))
+    expect(outcome.ok && outcome.settings.presets).toEqual([preset])
+  })
+
+  it('gives an older file without presets an empty list instead of failing', () => {
+    const outcome = parseSettings(raw())
+    expect(outcome.ok && outcome.settings.presets).toEqual([])
+  })
+
+  it('keeps the existing preferences of an older file and fills in the new ones', () => {
+    const outcome = parseSettings(raw())
+    expect(outcome.ok && outcome.settings.preferences).toEqual({
+      sidebarOpen: false,
+      sidebarTab: 'sessions',
+      sessionsTabOpen: true,
+      sessionsShowAll: true,
+      defaultFontSize: 13,
+      defaultShellId: null
+    })
+  })
+
+  it('keeps saved font size and default shell', () => {
+    const outcome = parseSettings(
+      raw({
+        preferences: {
+          sidebarOpen: true,
+          sidebarTab: 'projects',
+          sessionsTabOpen: false,
+          sessionsShowAll: false,
+          defaultFontSize: 16,
+          defaultShellId: 'powershell'
+        }
+      })
+    )
+    expect(outcome.ok && outcome.settings.preferences).toMatchObject({ defaultFontSize: 16, defaultShellId: 'powershell' })
+  })
+
+  it('drops broken presets, duplicates and presets with a multi-line command, and says so', () => {
+    const outcome = parseSettings(
+      raw({
+        presets: [
+          preset,
+          { ...preset, id: 'nope' },
+          { ...preset, id: '55555555-5555-4555-8555-555555555555', command: 'a\nb' },
+          { ...preset, name: 'Copy' },
+          { ...preset, id: '66666666-6666-4666-8666-666666666666', kind: 'agent', command: '   ' }
+        ]
+      })
+    )
+    expect(outcome.ok && outcome.settings.presets.map((item) => item.id)).toEqual([PRESET_ID])
+    expect(outcome.ok && outcome.notices).toContainEqual({ kind: 'dropped-presets', count: 4 })
+  })
+
+  it('allows a plain-terminal preset with no command, but not an agent preset without one', () => {
+    expect(PresetSchemaCheck({ ...preset, command: '' })).toBe(true)
+    expect(PresetSchemaCheck({ ...preset, kind: 'agent', command: '' })).toBe(false)
+    expect(PresetSchemaCheck({ ...preset, kind: 'agent', command: 'aider' })).toBe(true)
+  })
+
+  it('refuses a saved pane that has both a built-in agent and a custom command', () => {
+    const bad = workspace(ID_A, {
+      panes: [
+        {
+          title: 'x',
+          shellId: 'cmd',
+          shellLabel: 'c',
+          cwd: 'C:\\x',
+          agentId: 'claude',
+          startupCommand: 'calc',
+          fontSize: 13
+        }
+      ]
+    })
+    const outcome = parseSettings(raw({ workspaces: [bad] }))
+    expect(outcome.ok && outcome.settings.workspaces).toHaveLength(0)
+  })
+
+  it('keeps a saved pane that remembers its custom command', () => {
+    const good = workspace(ID_A, {
+      panes: [
+        { title: 'Dev', shellId: 'cmd', shellLabel: 'c', cwd: 'C:\\x', startupCommand: 'npm run dev', commandKind: 'command', fontSize: 13 }
+      ]
+    })
+    const outcome = parseSettings(raw({ workspaces: [good] }))
+    expect(outcome.ok && outcome.settings.workspaces[0]!.panes[0]!.startupCommand).toBe('npm run dev')
+  })
+
+  it('does not accept more presets than the limit', () => {
+    const many = Array.from({ length: 105 }, (_, index) => ({
+      ...preset,
+      id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`
+    }))
+    const outcome = parseSettings(raw({ presets: many }))
+    expect(outcome.ok && outcome.settings.presets).toHaveLength(100)
+    expect(outcome.ok && outcome.notices).toContainEqual({ kind: 'dropped-presets', count: 5 })
+  })
+})
+
+function PresetSchemaCheck(value: unknown): boolean {
+  return AppStateSchema.safeParse({
+    activeWorkspaceId: null,
+    workspaces: [],
+    recentProjects: [],
+    presets: [value],
+    preferences: defaultSettings().preferences
+  }).success
+}
+
 describe('migrateSettings', () => {
   it('leaves a file that is already current untouched', () => {
     const file = { version: 3, keep: 'me' }
@@ -194,6 +314,7 @@ describe('AppStateSchema (what the window is allowed to save)', () => {
     activeWorkspaceId: ID_A,
     workspaces: [workspace(ID_A)],
     recentProjects: [],
+    presets: [],
     preferences: defaultSettings().preferences
   }
 

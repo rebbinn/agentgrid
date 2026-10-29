@@ -72,6 +72,21 @@ describe('terminal request validation', () => {
     expect(TerminalCreateRequestSchema.safeParse({ ...resume, resumeSessionId: 'x; calc' }).success).toBe(false)
   })
 
+  it('accepts a custom startup command only when it is one plain line and no built-in agent is named', () => {
+    expect(TerminalCreateRequestSchema.safeParse({ ...validCreate, startupCommand: 'npm run dev' }).success).toBe(true)
+    expect(
+      TerminalCreateRequestSchema.safeParse({ ...validCreate, startupCommand: 'npm run dev', requireInstalled: true })
+        .success
+    ).toBe(true)
+    expect(TerminalCreateRequestSchema.safeParse({ ...validCreate, startupCommand: 'a\nb' }).success).toBe(false)
+    expect(TerminalCreateRequestSchema.safeParse({ ...validCreate, startupCommand: '' }).success).toBe(false)
+    expect(TerminalCreateRequestSchema.safeParse({ ...validCreate, startupCommand: 'x'.repeat(5000) }).success).toBe(false)
+    expect(
+      TerminalCreateRequestSchema.safeParse({ ...validCreate, agentId: 'claude', startupCommand: 'calc' }).success
+    ).toBe(false)
+    expect(TerminalCreateRequestSchema.safeParse({ ...validCreate, requireInstalled: 'yes' }).success).toBe(false)
+  })
+
   it('validates the list of old chats coming from the main process', () => {
     const session = {
       id: '3975237b-df03-44fe-b8e1-be208c6646d1',

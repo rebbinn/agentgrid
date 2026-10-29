@@ -151,6 +151,75 @@ describe('TerminalService.create', () => {
     }
   )
 
+  it('types a custom startup command into the shell exactly as written', async () => {
+    const { service, pty } = harness()
+    await service.create({ ...request, startupCommand: 'npm run dev -- --port 3000' })
+    expect(pty.written).toEqual(['npm run dev -- --port 3000\r'])
+  })
+
+  it('does not check the PATH for an ordinary command, so shell built-ins like dir work', async () => {
+    const { service, pty } = harness({ findExecutable: () => null })
+    const result = await service.create({ ...request, startupCommand: 'dir /w' })
+    expect(result.ok).toBe(true)
+    expect(pty.written).toEqual(['dir /w\r'])
+  })
+
+  it('refuses an agent-style command whose program is not installed and starts nothing', async () => {
+    const { service, spawn } = harness({ findExecutable: () => null })
+    const result = await service.create({ ...request, startupCommand: 'aider --model x', requireInstalled: true })
+    expect(result).toMatchObject({ ok: false, code: 'agent-missing', message: 'aider' })
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('starts an agent-style command when its program is on the PATH', async () => {
+    const lookups: string[] = []
+    const { service, pty } = harness({
+      findExecutable: (name) => {
+        lookups.push(name)
+        return 'C:\\bin\\aider.exe'
+      }
+    })
+    const result = await service.create({ ...request, startupCommand: 'aider --yes', requireInstalled: true })
+    expect(result.ok).toBe(true)
+    expect(lookups).toEqual(['aider'])
+    expect(pty.written).toEqual(['aider --yes\r'])
+  })
+
+  it('does not check the PATH when the program is given as a path, or inside WSL', async () => {
+    const { service } = harness({ findExecutable: () => null })
+    expect(
+      (await service.create({ ...request, startupCommand: 'C:\\tools\\x.exe --a', requireInstalled: true })).ok
+    ).toBe(true)
+    const second = harness({ findExecutable: () => null })
+    expect(
+      (
+        await second.service.create({
+          ...request,
+          shellId: 'wsl:Ubuntu',
+          startupCommand: 'aider',
+          requireInstalled: true
+        })
+      ).ok
+    ).toBe(true)
+  })
+
+  it.each(['echo a\necho b', 'echo a\recho b', 'calc\u001b[31m', '', '   '])(
+    'never lets %j be typed into a shell',
+    async (startupCommand) => {
+      const { service, spawn } = harness()
+      const result = await service.create({ ...request, startupCommand })
+      expect(result).toMatchObject({ ok: false, code: 'spawn-failed' })
+      expect(spawn).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not allow a custom command together with a built-in agent', async () => {
+    const { service, spawn } = harness()
+    const result = await service.create({ ...request, agentId: 'claude', startupCommand: 'calc' })
+    expect(result).toMatchObject({ ok: false, code: 'spawn-failed' })
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
   it('does not type anything for a plain terminal', async () => {
     const { service, pty } = harness()
     await service.create(request)

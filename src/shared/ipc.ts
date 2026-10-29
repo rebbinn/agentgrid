@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { AGENT_IDS } from './agents'
-import type { AppState, LoadedSettings } from './settings'
+import { CommandLineSchema, type AppState, type LoadedSettings } from './settings'
 
 export const IpcChannel = {
   appInfo: 'app:info',
@@ -14,6 +14,7 @@ export const IpcChannel = {
   terminalData: 'terminal:data',
   terminalExit: 'terminal:exit',
   sessionsList: 'sessions:list',
+  agentsStatus: 'agents:status',
   settingsLoad: 'settings:load',
   settingsSave: 'settings:save',
   settingsFlushRequest: 'settings:flush-request',
@@ -67,11 +68,16 @@ export const TerminalCreateRequestSchema = z
     cwd: z.string().min(1).max(1024),
     agentId: z.enum(AGENT_IDS).optional(),
     resumeSessionId: z.uuid().optional(),
+    startupCommand: CommandLineSchema.optional(),
+    requireInstalled: z.boolean().optional(),
     cols: ColsSchema,
     rows: RowsSchema
   })
   .refine((request) => request.resumeSessionId === undefined || request.agentId === 'claude', {
     message: 'Only Claude sessions can be resumed'
+  })
+  .refine((request) => request.startupCommand === undefined || request.agentId === undefined, {
+    message: 'A custom command cannot be combined with a built-in agent'
   })
 export type TerminalCreateRequest = z.infer<typeof TerminalCreateRequestSchema>
 
@@ -83,6 +89,13 @@ export const ClaudeSessionSchema = z.object({
 })
 export type ClaudeSession = z.infer<typeof ClaudeSessionSchema>
 export const ClaudeSessionListSchema = z.array(ClaudeSessionSchema)
+
+export const AgentStatusSchema = z.object({
+  claude: z.boolean(),
+  codex: z.boolean(),
+  gemini: z.boolean()
+})
+export type AgentStatus = z.infer<typeof AgentStatusSchema>
 
 export const LaunchRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('claude') }),
@@ -167,6 +180,9 @@ export interface AgentGridApi {
   }
   sessions: {
     list(): Promise<ClaudeSession[]>
+  }
+  agents: {
+    status(): Promise<AgentStatus>
   }
   launcher: {
     takePending(): Promise<LaunchRequest[]>

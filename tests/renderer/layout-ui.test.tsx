@@ -87,10 +87,17 @@ describe('layout menu', () => {
     expect(grid().style.gridTemplateRows).toBe('0.5fr 0.5fr')
   })
 
-  it('offers empty slots for the room that is left in a fixed layout', async () => {
+  it('offers empty slots only for whole empty rows of a fixed layout', async () => {
     await openPanes(1)
     chooseLayout(/2 × 2/)
-    expect(screen.getAllByRole('group', { name: 'Boş yuva' })).toHaveLength(3)
+    expect(screen.getAllByRole('group', { name: 'Boş yuva' })).toHaveLength(2)
+  })
+
+  it('lets the only terminal of a half-empty row use the whole width instead of leaving a hole', async () => {
+    await openPanes(1)
+    chooseLayout(/2 × 2/)
+    const only = screen.getByRole('region', { name: 'Terminal: Claude' })
+    expect(only.style.gridColumn).toBe('1 / span 2')
   })
 
   it('starts Claude in an empty slot', async () => {
@@ -133,6 +140,54 @@ describe('layout menu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Düzülüş' }))
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
     expect(screen.queryByRole('menu')).toBeNull()
+  })
+})
+
+describe('an odd number of terminals', () => {
+  it('gives the third terminal the whole bottom row, with no empty slot', async () => {
+    await openPanes(3)
+    const third = screen.getByRole('region', { name: 'Terminal: Claude 3' })
+    expect(third.style.gridColumn).toBe('1 / span 2')
+    expect(third.style.gridRow).toBe('2')
+    expect(screen.queryAllByRole('group', { name: 'Boş yuva' })).toHaveLength(0)
+    expect(screen.getByRole('region', { name: 'Terminal: Claude' }).style.gridColumn).toBe('1')
+    expect(screen.getByRole('region', { name: 'Terminal: Claude 2' }).style.gridColumn).toBe('2')
+  })
+
+  it('shows the vertical divider only above the wide bottom terminal, not across it', async () => {
+    await openPanes(3)
+    const divider = screen.getByRole('separator', { name: 'Sütun ayırıcısı 1' })
+    expect(divider.style.height).toBe('50%')
+  })
+
+  it('stretches only the last terminal when the last row is short (five terminals in three columns)', async () => {
+    await openPanes(5)
+    expect(grid().style.gridTemplateColumns).toBe(
+      `${1 / 3}fr ${1 / 3}fr ${1 / 3}fr`
+    )
+    expect(screen.getByRole('region', { name: 'Terminal: Claude 4' }).style.gridColumn).toBe('1')
+    expect(screen.getByRole('region', { name: 'Terminal: Claude 5' }).style.gridColumn).toBe('2 / span 2')
+  })
+
+  it('keeps every divider full height when all rows are full', async () => {
+    await openPanes(4)
+    expect(screen.getByRole('separator', { name: 'Sütun ayırıcısı 1' }).style.height).toBe('100%')
+  })
+
+  it('goes back to normal size cells when the odd terminal is joined by another', async () => {
+    await openPanes(3)
+    fireEvent.click(screen.getByRole('button', { name: /claude \(yeni terminal\)/i }))
+    await waitFor(() => expect(useTerminalStore.getState().panes).toHaveLength(4))
+    expect(screen.getByRole('region', { name: 'Terminal: Claude 3' }).style.gridColumn).toBe('1')
+    expect(screen.getByRole('region', { name: 'Terminal: Claude 4' }).style.gridColumn).toBe('2')
+  })
+
+  it('moves the wide row to whichever terminal is last after reordering', async () => {
+    await openPanes(3)
+    const third = useTerminalStore.getState().panes[2]!.id
+    act(() => useTerminalStore.getState().movePane(third, -1))
+    expect(screen.getByRole('region', { name: 'Terminal: Claude 2' }).style.gridColumn).toBe('1 / span 2')
+    expect(screen.getByRole('region', { name: 'Terminal: Claude 3' }).style.gridColumn).toBe('2')
   })
 })
 
@@ -224,6 +279,28 @@ describe('keyboard focus after clicking a pane', () => {
     fireEvent.mouseDown(within(pane).getByRole('button', { name: 'Panel əməliyyatları' }))
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(managed.focus).not.toHaveBeenCalled()
+  })
+
+  it('does not take the keyboard back when something else (such as the palette) asked for it in the meantime', async () => {
+    await openPanes(1)
+    const outside = document.createElement('input')
+    document.body.appendChild(outside)
+    const managed = fakeRegistry.get(useTerminalStore.getState().panes[0]!.id)!
+    managed.focus.mockClear()
+    fireEvent.mouseDown(screen.getByText('Claude', { selector: '.pane__title' }))
+    outside.focus()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(managed.focus).not.toHaveBeenCalled()
+    outside.remove()
+  })
+
+  it('still takes the keyboard back when nothing else has it', async () => {
+    await openPanes(1)
+    const managed = fakeRegistry.get(useTerminalStore.getState().panes[0]!.id)!
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    managed.focus.mockClear()
+    fireEvent.mouseDown(screen.getByText('Claude', { selector: '.pane__title' }))
+    await waitFor(() => expect(managed.focus).toHaveBeenCalled())
   })
 
   it('does not pull focus away from the rename box', async () => {

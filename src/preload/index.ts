@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import {
+  AgentStatusSchema,
   AppInfoSchema,
   ClaudeSessionListSchema,
   IpcChannel,
@@ -53,6 +54,9 @@ const api: AgentGridApi = {
   },
   sessions: {
     list: async () => ClaudeSessionListSchema.parse(await ipcRenderer.invoke(IpcChannel.sessionsList))
+  },
+  agents: {
+    status: async () => AgentStatusSchema.parse(await ipcRenderer.invoke(IpcChannel.agentsStatus))
   },
   launcher: {
     takePending: async () =>

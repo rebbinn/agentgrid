@@ -175,7 +175,7 @@ describe('SettingsStore', () => {
     await store.save(state('Plain'))
     const text = await readFile(join(directory, SETTINGS_FILE), 'utf8')
     expect(Object.keys(JSON.parse(text)).sort()).toEqual(
-      ['activeWorkspaceId', 'preferences', 'recentProjects', 'version', 'workspaces'].sort()
+      ['activeWorkspaceId', 'preferences', 'presets', 'recentProjects', 'version', 'workspaces'].sort()
     )
   })
 })

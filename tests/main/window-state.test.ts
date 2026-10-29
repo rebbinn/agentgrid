@@ -10,6 +10,7 @@ import {
 
 const primary: Area = { x: 0, y: 0, width: 1920, height: 1040 }
 const second: Area = { x: 1920, y: 0, width: 1920, height: 1040 }
+const small: Area = { x: 0, y: 0, width: 1366, height: 728 }
 
 describe('resolveWindowBounds', () => {
   it('uses the default size on first launch', () => {
@@ -47,18 +48,47 @@ describe('resolveWindowBounds', () => {
     expect(bounds.x).toBeUndefined()
   })
 
-  it('accepts a window that is only partly on screen but still usable', () => {
-    const bounds = resolveWindowBounds({ width: 1000, height: 700, x: -300, y: 100, maximized: false }, [primary])
-    expect(bounds.x).toBe(-300)
+  it('pulls a window that hangs over the screen edge back inside, so no buttons are cut off', () => {
+    const left = resolveWindowBounds({ width: 1000, height: 700, x: -300, y: 100, maximized: false }, [primary])
+    expect(left.x).toBe(0)
+    const right = resolveWindowBounds({ width: 1000, height: 700, x: 1500, y: 100, maximized: false }, [primary])
+    expect(right.x).toBe(920)
+    const bottom = resolveWindowBounds({ width: 1000, height: 700, x: 100, y: 800, maximized: false }, [primary])
+    expect(bottom.y).toBe(340)
   })
 
-  it('never goes below the minimum size', () => {
+  it('shrinks a window that is bigger than the screen it is on', () => {
+    const bounds = resolveWindowBounds({ width: 1800, height: 900, x: 0, y: 0, maximized: false }, [small])
+    expect(bounds).toMatchObject({ width: 1366, height: 728, x: 0, y: 0 })
+  })
+
+  it('shrinks to the primary screen even when no position was saved', () => {
+    const bounds = resolveWindowBounds({ width: 1800, height: 900, maximized: false }, [small])
+    expect(bounds.width).toBe(1366)
+    expect(bounds.height).toBe(728)
+    expect(bounds.x).toBeUndefined()
+  })
+
+  it('moves a window that spans two monitors fully onto the one where most of it is', () => {
+    const mostlyFirst = resolveWindowBounds({ width: 1000, height: 700, x: 1100, y: 0, maximized: false }, [primary, second])
+    expect(mostlyFirst.x).toBe(920)
+    const mostlySecond = resolveWindowBounds({ width: 1000, height: 700, x: 1500, y: 0, maximized: false }, [primary, second])
+    expect(mostlySecond.x).toBe(1920)
+  })
+
+  it('never goes below the minimum size, unless the screen itself is smaller', () => {
     const bounds = resolveWindowBounds({ width: 500, height: 400, x: 0, y: 0, maximized: false }, [primary])
     expect(bounds.width).toBe(MIN_WIDTH)
     expect(bounds.height).toBe(MIN_HEIGHT)
+    const tiny: Area = { x: 0, y: 0, width: 640, height: 400 }
+    const squeezed = resolveWindowBounds({ width: 500, height: 400, x: 0, y: 0, maximized: false }, [tiny])
+    expect(squeezed.width).toBe(640)
+    expect(squeezed.height).toBe(400)
   })
 
   it('works without any known display', () => {
-    expect(resolveWindowBounds({ width: 1000, height: 700, x: 10, y: 10, maximized: false }, []).x).toBeUndefined()
+    const bounds = resolveWindowBounds({ width: 1000, height: 700, x: 10, y: 10, maximized: false }, [])
+    expect(bounds.x).toBeUndefined()
+    expect(bounds.width).toBe(1000)
   })
 })

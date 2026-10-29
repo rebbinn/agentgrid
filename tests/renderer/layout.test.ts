@@ -3,11 +3,14 @@ import {
   LAYOUT_PRESETS,
   MIN_PANE_FRACTION,
   boundaryOffsets,
+  emptyRowSlots,
   equalFractions,
   normalizeFractions,
+  paneCell,
   resizeBoundary,
   resolveGrid,
-  slotPosition
+  slotPosition,
+  verticalSplitterExtent
 } from '../../src/renderer/src/lib/layout'
 
 const sum = (values: number[]): number => values.reduce((total, value) => total + value, 0)
@@ -102,6 +105,60 @@ describe('fractions', () => {
   it('computes where the dividers sit', () => {
     expect(boundaryOffsets([0.25, 0.25, 0.5])).toEqual([0.25, 0.5])
     expect(boundaryOffsets([1])).toEqual([])
+  })
+})
+
+describe('paneCell', () => {
+  it('keeps normal cells while every row is full', () => {
+    expect(paneCell(3, 2, 4)).toEqual({ column: 2, row: 2, span: 1 })
+    expect(paneCell(0, 3, 6)).toEqual({ column: 1, row: 1, span: 1 })
+  })
+
+  it('stretches only the last terminal over the free columns of the last row', () => {
+    expect(paneCell(2, 2, 3)).toEqual({ column: 1, row: 2, span: 2 })
+    expect(paneCell(0, 2, 3)).toEqual({ column: 1, row: 1, span: 1 })
+    expect(paneCell(4, 3, 5)).toEqual({ column: 2, row: 2, span: 2 })
+    expect(paneCell(6, 3, 7)).toEqual({ column: 1, row: 3, span: 3 })
+  })
+
+  it('never makes a single terminal narrower than the grid', () => {
+    expect(paneCell(0, 1, 1)).toEqual({ column: 1, row: 1, span: 1 })
+    expect(paneCell(0, 4, 1)).toEqual({ column: 1, row: 1, span: 4 })
+  })
+})
+
+describe('emptyRowSlots', () => {
+  it('has no empty slots when the used rows fill the grid', () => {
+    expect(emptyRowSlots(3, 2, 4)).toEqual([])
+    expect(emptyRowSlots(6, 3, 6)).toEqual([])
+  })
+
+  it('lists only the cells of rows that have no terminal at all', () => {
+    expect(emptyRowSlots(1, 2, 4)).toEqual([
+      { column: 1, row: 2 },
+      { column: 2, row: 2 }
+    ])
+    expect(emptyRowSlots(2, 3, 6)).toHaveLength(3)
+  })
+})
+
+describe('verticalSplitterExtent', () => {
+  it('goes the whole height when every row has a terminal on both sides', () => {
+    expect(verticalSplitterExtent(0, 4, 2, [0.5, 0.5])).toBe(1)
+    expect(verticalSplitterExtent(1, 6, 3, [0.5, 0.5])).toBe(1)
+  })
+
+  it('stops above a last row whose terminal spans across the divider', () => {
+    expect(verticalSplitterExtent(0, 3, 2, [0.4, 0.6])).toBeCloseTo(0.4)
+  })
+
+  it('keeps the divider in the last row for the columns that still have separate terminals', () => {
+    expect(verticalSplitterExtent(0, 5, 3, [0.5, 0.5])).toBe(1)
+    expect(verticalSplitterExtent(1, 5, 3, [0.5, 0.5])).toBeCloseTo(0.5)
+  })
+
+  it('has no divider at all for a lone terminal in a single row', () => {
+    expect(verticalSplitterExtent(0, 1, 2, [1])).toBe(0)
   })
 })
 

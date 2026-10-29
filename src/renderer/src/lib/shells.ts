@@ -16,6 +16,10 @@ export function resetShellsCache(): void {
   cached = null
 }
 
-export function pickDefaultShell(shells: readonly ShellInfo[]): ShellInfo | null {
-  return shells.find((shell) => shell.id === DEFAULT_SHELL_ID) ?? shells[0] ?? null
+export function pickDefaultShell(
+  shells: readonly ShellInfo[],
+  preferredId: string | null = null
+): ShellInfo | null {
+  const preferred = preferredId ? shells.find((shell) => shell.id === preferredId) : undefined
+  return preferred ?? shells.find((shell) => shell.id === DEFAULT_SHELL_ID) ?? shells[0] ?? null
 }

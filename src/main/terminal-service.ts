@@ -1,4 +1,5 @@
 import { findAgent } from '@shared/agents'
+import { firstCommandToken, isPathLike, isSingleLineCommand } from '@shared/command-text'
 import type {
   TerminalCreateRequest,
   TerminalCreateResult,
@@ -101,6 +102,19 @@ export class TerminalService {
       return { ok: false, code: 'agent-missing', message: agent.command }
     }
 
+    const customCommand = request.startupCommand
+    if (customCommand !== undefined) {
+      if (agent || !isSingleLineCommand(customCommand)) {
+        return { ok: false, code: 'spawn-failed', message: 'The startup command is not allowed' }
+      }
+      const executable = firstCommandToken(customCommand)
+      const mustBeInstalled =
+        request.requireInstalled === true && shell.kind !== 'wsl' && !isPathLike(executable)
+      if (mustBeInstalled && !this.deps.findExecutable(executable)) {
+        return { ok: false, code: 'agent-missing', message: executable }
+      }
+    }
+
     let pty: PtyProcess
     try {
       pty = this.deps.spawn(shell.executable, shell.args, {
@@ -123,6 +137,8 @@ export class TerminalService {
     if (agent) {
       const resume = request.resumeSessionId ? ` --resume ${request.resumeSessionId}` : ''
       pty.write(`${agent.command}${resume}\r`)
+    } else if (customCommand !== undefined) {
+      pty.write(`${customCommand}\r`)
     }
 
     return {

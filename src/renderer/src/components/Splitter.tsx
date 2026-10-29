@@ -8,6 +8,7 @@ interface SplitterProps {
   orientation: 'vertical' | 'horizontal'
   index: number
   offset: number
+  extent?: number
   fractions: number[]
   label: string
   containerRef: RefObject<HTMLDivElement | null>
@@ -19,6 +20,7 @@ export function Splitter({
   orientation,
   index,
   offset,
+  extent = 1,
   fractions,
   label,
   containerRef,
@@ -79,7 +81,7 @@ export function Splitter({
   return (
     <div
       className={`splitter splitter--${orientation}`}
-      style={isVertical ? { left: position } : { top: position }}
+      style={isVertical ? { left: position, bottom: 'auto', height: `${extent * 100}%` } : { top: position }}
       role="separator"
       aria-orientation={isVertical ? 'vertical' : 'horizontal'}
       aria-label={label}

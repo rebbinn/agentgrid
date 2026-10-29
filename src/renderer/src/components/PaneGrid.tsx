@@ -1,9 +1,11 @@
 import { useMemo, useRef, useState } from 'react'
 import {
   boundaryOffsets,
+  emptyRowSlots,
   normalizeFractions,
+  paneCell,
   resolveGrid,
-  slotPosition
+  verticalSplitterExtent
 } from '../lib/layout'
 import { useLayoutStore } from '../state/layout-store'
 import { useTerminalStore } from '../state/terminal-store'
@@ -37,11 +39,7 @@ export function PaneGrid() {
   const domOrder = useMemo(() => [...panes].sort((a, b) => a.seq - b.seq), [panes])
   const slotById = useMemo(() => new Map(panes.map((pane, index) => [pane.id, index])), [panes])
 
-  const emptySlots = focusMode
-    ? []
-    : Array.from({ length: grid.slots - panes.length }, (_, offset) =>
-        slotPosition(panes.length + offset, grid.columns)
-      )
+  const emptySlots = focusMode ? [] : emptyRowSlots(panes.length, grid.columns, grid.slots)
 
   return (
     <div className="pane-area">
@@ -57,14 +55,15 @@ export function PaneGrid() {
         }}
       >
         {domOrder.map((pane) => {
-          const position = slotPosition(slotById.get(pane.id) ?? 0, grid.columns)
+          const cell = paneCell(slotById.get(pane.id) ?? 0, grid.columns, panes.length)
           return (
             <TerminalPane
               key={pane.id}
               pane={pane}
               active={pane.id === activePaneId}
-              column={focusMode ? 1 : position.column}
-              row={focusMode ? 1 : position.row}
+              column={focusMode ? 1 : cell.column}
+              columnSpan={focusMode ? 1 : cell.span}
+              row={focusMode ? 1 : cell.row}
               focusMode={focusMode}
               hidden={focusMode && pane.id !== activePaneId}
             />
@@ -80,19 +79,24 @@ export function PaneGrid() {
         ))}
 
         {!focusMode &&
-          boundaryOffsets(columns).map((offset, index) => (
+          boundaryOffsets(columns).map((offset, index) => {
+            const extent = verticalSplitterExtent(index, panes.length, grid.columns, rows)
+            if (extent <= 0) return null
+            return (
             <Splitter
               key={`column-${index}`}
               orientation="vertical"
               index={index}
               offset={offset}
+              extent={extent}
               fractions={columns}
               label={strings.layout.columnSplitter(index + 1)}
               containerRef={containerRef}
               onChange={setColumnSizes}
               onDragStateChange={setDragging}
             />
-          ))}
+            )
+          })}
 
         {!focusMode &&
           boundaryOffsets(rows).map((offset, index) => (

@@ -18,6 +18,7 @@ import {
   TerminalKillSchema,
   TerminalResizeSchema,
   TerminalWriteSchema,
+  type AgentStatus,
   type AppInfo,
   type ClaudeSession,
   type LaunchRequest,
@@ -34,6 +35,7 @@ export interface IpcServices {
   terminals: TerminalService
   getShells(): Promise<ShellDefinition[]>
   listSessions(): Promise<ClaudeSession[]>
+  agentStatus(): AgentStatus
   takePendingLaunch(): LaunchRequest[]
   loadSettings(): LoadedSettings
   saveSettings(state: AppState): void
@@ -124,6 +126,11 @@ export function registerIpc(
   ipcMain.handle(IpcChannel.sessionsList, async (event): Promise<ClaudeSession[]> => {
     guard(event)
     return services.listSessions()
+  })
+
+  ipcMain.handle(IpcChannel.agentsStatus, (event): AgentStatus => {
+    guard(event)
+    return services.agentStatus()
   })
 
   ipcMain.handle(IpcChannel.settingsLoad, (event): LoadedSettings => {

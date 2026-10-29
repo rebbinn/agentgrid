@@ -1,8 +1,19 @@
-import { memo, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type MouseEvent
+} from 'react'
 import { findAgent } from '@shared/agents'
 import { useClosePane } from '../hooks/use-close-pane'
 import { folderName } from '../lib/path'
+import { withShortcut } from '../lib/shortcuts'
 import { useTerminalStore, MAX_TITLE_LENGTH, type Pane } from '../state/terminal-store'
+import { useUiStore } from '../state/ui-store'
 import { strings } from '../strings'
 import { terminalRegistry } from '../terminal/registry'
 import { MAX_FONT_SIZE, MIN_FONT_SIZE } from '../terminal/theme'
@@ -13,6 +24,7 @@ import { TerminalView } from './TerminalView'
 const DRAG_TYPE = 'application/x-agentgrid-pane'
 
 function describeCommand(pane: Pane): string {
+  if (pane.startupCommand) return pane.startupCommand
   if (!pane.agentId) return ''
   const command = findAgent(pane.agentId).command
   return pane.resumeSessionId ? `${command} --resume …` : command
@@ -22,12 +34,21 @@ interface TerminalPaneProps {
   pane: Pane
   active: boolean
   column: number
+  columnSpan: number
   row: number
   focusMode: boolean
   hidden: boolean
 }
 
-function TerminalPaneComponent({ pane, active, column, row, focusMode, hidden }: TerminalPaneProps) {
+function TerminalPaneComponent({
+  pane,
+  active,
+  column,
+  columnSpan,
+  row,
+  focusMode,
+  hidden
+}: TerminalPaneProps) {
   const closePane = useClosePane()
   const [renaming, setRenaming] = useState(false)
   const [dropTarget, setDropTarget] = useState(false)
@@ -42,8 +63,12 @@ function TerminalPaneComponent({ pane, active, column, row, focusMode, hidden }:
     store().setActive(pane.id)
     const target = event.target as HTMLElement
     if (target.closest('button, input, [role="menu"], [role="menuitem"]')) return
+    const section = event.currentTarget
     window.setTimeout(() => {
-      if (!renamingRef.current) terminalRegistry.get(pane.id)?.focus()
+      if (renamingRef.current) return
+      const focused = document.activeElement
+      const someoneElseHasFocus = focused !== null && focused !== document.body && !section.contains(focused)
+      if (!someoneElseHasFocus) terminalRegistry.get(pane.id)?.focus()
     }, 0)
   }
   const restart = (): void => void store().restart(pane.id)
@@ -60,11 +85,18 @@ function TerminalPaneComponent({ pane, active, column, row, focusMode, hidden }:
     focusTerminal()
   }
 
-  const startRename = (): void => {
+  const startRename = useCallback((): void => {
     renameFinished.current = false
     renamingRef.current = true
     setRenaming(true)
-  }
+  }, [])
+
+  const renameRequestId = useUiStore((state) => state.renameRequestId)
+  useEffect(() => {
+    if (renameRequestId !== pane.id) return
+    useUiStore.getState().clearRenameRequest()
+    startRename()
+  }, [renameRequestId, pane.id, startRename])
 
   const handleRenameKey = (event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === 'Enter') finishRename(event.currentTarget.value)
@@ -147,7 +179,11 @@ function TerminalPaneComponent({ pane, active, column, row, focusMode, hidden }:
       data-active={active}
       data-status={pane.status}
       data-drop-target={dropTarget}
-      style={hidden ? { display: 'none' } : { gridColumn: column, gridRow: row }}
+      style={
+        hidden
+          ? { display: 'none' }
+          : { gridColumn: columnSpan > 1 ? `${column} / span ${columnSpan}` : column, gridRow: row }
+      }
       aria-label={strings.terminal.paneLabel(pane.title)}
       onMouseDown={activate}
       onDragOver={handleDragOver}
@@ -197,7 +233,7 @@ function TerminalPaneComponent({ pane, active, column, row, focusMode, hidden }:
           type="button"
           className="icon-button"
           aria-label={focusMode ? strings.pane.restore : strings.pane.maximize}
-          data-tip={focusMode ? strings.pane.restore : strings.pane.maximize}
+          data-tip={withShortcut(focusMode ? strings.pane.restore : strings.pane.maximize, 'toggleFocus')}
           onClick={() => store().toggleFocus(pane.id)}
         >
           <Icon name={focusMode ? 'restore' : 'maximize'} size={14} />
@@ -209,7 +245,7 @@ function TerminalPaneComponent({ pane, active, column, row, focusMode, hidden }:
           type="button"
           className="icon-button"
           aria-label={strings.terminal.close}
-          data-tip={strings.terminal.close}
+          data-tip={withShortcut(strings.terminal.close, 'closePane')}
           onClick={() => closePane(pane.id)}
         >
           <Icon name="close" size={14} />
@@ -225,7 +261,7 @@ function TerminalPaneComponent({ pane, active, column, row, focusMode, hidden }:
             <p className="pane__overlay-text">
               {strings.restore.overlayText(pane.shellLabel, folderName(pane.cwd))}
             </p>
-            {pane.agentId && (
+            {(pane.agentId || pane.startupCommand) && (
               <p className="pane__overlay-text">
                 {strings.restore.overlayCommand(describeCommand(pane))}
               </p>

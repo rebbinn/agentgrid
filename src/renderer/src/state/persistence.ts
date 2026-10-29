@@ -9,6 +9,8 @@ import {
 import { strings } from '../strings'
 import { isPersistencePaused, onPersistenceResumed, withPersistencePaused } from './persistence-gate'
 import { useLayoutStore } from './layout-store'
+import { usePrefsStore } from './prefs-store'
+import { usePresetsStore } from './presets-store'
 import { useProjectStore } from './project-store'
 import { useSessionsStore } from './sessions-store'
 import { useTerminalStore } from './terminal-store'
@@ -29,15 +31,19 @@ export function collectAppState(): AppState {
   const { workspaces, activeId } = useWorkspaceStore.getState()
   const live = captureLive()
   const ui = useUiStore.getState()
+  const prefs = usePrefsStore.getState()
   return {
     activeWorkspaceId: activeId,
     workspaces: workspaces.map((item) => (item.id === activeId ? { ...item, ...live } : item)),
     recentProjects: useProjectStore.getState().recentPaths,
+    presets: usePresetsStore.getState().presets,
     preferences: {
       sidebarOpen: ui.sidebarOpen,
       sidebarTab: ui.sidebarTab,
       sessionsTabOpen: ui.sessionsTabOpen,
-      sessionsShowAll: useSessionsStore.getState().showAll
+      sessionsShowAll: useSessionsStore.getState().showAll,
+      defaultFontSize: prefs.defaultFontSize,
+      defaultShellId: prefs.defaultShellId
     }
   }
 }
@@ -72,6 +78,8 @@ function noticeMessage(notice: SettingsNotice): string {
       return strings.notices.newer(file)
     case 'dropped-workspaces':
       return strings.notices.dropped(notice.count ?? 0)
+    case 'dropped-presets':
+      return strings.notices.droppedPresets(notice.count ?? 0)
   }
 }
 
@@ -83,6 +91,10 @@ function applyPreferences(preferences: Preferences): void {
     sessionsTabOpen: preferences.sessionsTabOpen
   })
   useSessionsStore.setState({ showAll: preferences.sessionsShowAll })
+  usePrefsStore.setState({
+    defaultFontSize: preferences.defaultFontSize,
+    defaultShellId: preferences.defaultShellId
+  })
 }
 
 export function startPersistence(): void {
@@ -94,6 +106,8 @@ export function startPersistence(): void {
     useProjectStore.subscribe(scheduleSave),
     useUiStore.subscribe(scheduleSave),
     useSessionsStore.subscribe(scheduleSave),
+    usePrefsStore.subscribe(scheduleSave),
+    usePresetsStore.subscribe(scheduleSave),
     useWorkspaceStore.subscribe(scheduleSave),
     onPersistenceResumed(scheduleSave),
     window.agentgrid.settings.onFlushRequest(() => {
@@ -119,6 +133,7 @@ async function doRestore(): Promise<void> {
   const { state, notices } = await loadSettingsSafely()
   applyPreferences(state.preferences)
   useProjectStore.getState().setRecentPaths(state.recentProjects)
+  usePresetsStore.getState().setPresets(state.presets)
 
   const workspaces = state.workspaces.length > 0 ? state.workspaces : [emptyWorkspace(strings.workspace.defaultName)]
   const active = workspaces.find((item) => item.id === state.activeWorkspaceId) ?? workspaces[0]!

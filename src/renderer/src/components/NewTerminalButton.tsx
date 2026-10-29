@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ShellInfo } from '@shared/ipc'
 import { useLaunch } from '../hooks/use-launch'
 import { getShells } from '../lib/shells'
+import { withShortcut } from '../lib/shortcuts'
 import { strings } from '../strings'
 import { Dropdown, type DropdownItem } from './Dropdown'
 import { Icon } from './Icon'
@@ -27,6 +28,7 @@ export function NewTerminalButton() {
       <button
         type="button"
         className="btn btn--primary split-button__main"
+        data-tip={withShortcut(strings.header.newTerminal, 'newTerminal')}
         onClick={() => void launch()}
       >
         <Icon name="plus" />
