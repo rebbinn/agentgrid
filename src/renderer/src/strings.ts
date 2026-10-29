@@ -64,6 +64,7 @@ export const strings = {
     renameItem: 'Adı dəyişdir…',
     deleteItem: 'Bu iş sahəsini sil…',
     paneCount: (count: number) => `${count} terminal`,
+    runningCount: (count: number) => `${count} işləyir`,
     noProject: 'layihə yoxdur',
     loading: 'Yüklənir…',
     dialogs: {
@@ -78,11 +79,7 @@ export const strings = {
       deleteText: (name: string) =>
         `"${name}" iş sahəsi və onun saxlanmış terminal düzülüşü silinəcək. Layihə qovluğunuza toxunulmayacaq.`,
       deleteRunning: (count: number) => ` İçindəki ${count} işləyən terminal dayandırılacaq.`,
-      delete: 'Sil',
-      switchTitle: 'İş sahəsi dəyişdirilsin?',
-      switchText: (running: number, name: string) =>
-        `Hazırkı iş sahəsində ${running} işləyən terminal var. "${name}" iş sahəsinə keçsəniz, onlar dayandırılacaq. Düzülüş və terminal konfiqurasiyası yadda qalacaq.`,
-      switch: 'Dayandır və keç'
+      delete: 'Sil'
     }
   },
   restore: {

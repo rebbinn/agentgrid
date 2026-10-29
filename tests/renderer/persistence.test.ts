@@ -429,13 +429,14 @@ describe('workspaces', () => {
     expect(useLayoutStore.getState().preset).toBe('rows')
   })
 
-  it('stops the processes of the workspace it leaves', async () => {
+  it('keeps the processes of the workspace it leaves running in the background', async () => {
     await twoWorkspaces()
     await useTerminalStore.getState().startAllIdle()
     const leaving = useTerminalStore.getState().panes[0]!.id
     await switchWorkspace(ID_B)
-    expect(api.terminal.kill).toHaveBeenCalledWith(leaving)
-    expect(fakeRegistry.remove).toHaveBeenCalledWith(leaving)
+    expect(api.terminal.kill).not.toHaveBeenCalledWith(leaving)
+    expect(fakeRegistry.remove).not.toHaveBeenCalledWith(leaving)
+    expect(useTerminalStore.getState().parked[ID_A]?.panes.map((pane) => pane.id)).toEqual([leaving])
   })
 
   it('does nothing when switching to the workspace that is already open or does not exist', async () => {

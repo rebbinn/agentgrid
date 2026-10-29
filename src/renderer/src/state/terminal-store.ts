@@ -45,9 +45,22 @@ export interface LaunchOptions {
   title?: string
 }
 
+export interface ParkedPanes {
+  panes: Pane[]
+  activePaneId: string | null
+}
+
+export function countRunning(panes: readonly Pane[]): number {
+  return panes.filter((pane) => pane.status === 'running' || pane.status === 'starting').length
+}
+
 interface TerminalState {
   panes: Pane[]
   activePaneId: string | null
+  parked: Record<string, ParkedPanes>
+  parkPanes: (workspaceId: string) => void
+  takeParked: (workspaceId: string) => boolean
+  discardParked: (workspaceId: string) => void
   launch: (options: LaunchOptions) => Promise<string | null>
   spawnPane: (id: string, cols: number, rows: number) => Promise<void>
   restart: (id: string) => Promise<void>
@@ -102,19 +115,63 @@ export function nextPaneTitle(base: string, existingTitles: readonly string[]): 
 }
 
 export const useTerminalStore = create<TerminalState>((set, get) => {
+  function parkedKeyOf(parked: Record<string, ParkedPanes>, id: string): string | undefined {
+    return Object.keys(parked).find((key) => parked[key]?.panes.some((pane) => pane.id === id))
+  }
+
   function updatePane(id: string, patch: Partial<Pane>): void {
-    set((state) => ({
-      panes: state.panes.map((pane) => (pane.id === id ? { ...pane, ...patch } : pane))
-    }))
+    const apply = (pane: Pane): Pane => (pane.id === id ? { ...pane, ...patch } : pane)
+    set((state) => {
+      if (state.panes.some((pane) => pane.id === id)) return { panes: state.panes.map(apply) }
+      const key = parkedKeyOf(state.parked, id)
+      const group = key ? state.parked[key] : undefined
+      if (!key || !group) return state
+      return { parked: { ...state.parked, [key]: { ...group, panes: group.panes.map(apply) } } }
+    })
   }
 
   function findPane(id: string): Pane | undefined {
-    return get().panes.find((pane) => pane.id === id)
+    const { panes, parked } = get()
+    const visible = panes.find((pane) => pane.id === id)
+    if (visible) return visible
+    const key = parkedKeyOf(parked, id)
+    return key ? parked[key]?.panes.find((pane) => pane.id === id) : undefined
   }
 
   return {
     panes: [],
     activePaneId: null,
+    parked: {},
+
+    parkPanes: (workspaceId) => {
+      const { panes, activePaneId, parked } = get()
+      if (panes.every((pane) => pane.status === 'idle')) {
+        get().reset()
+        return
+      }
+      set({ parked: { ...parked, [workspaceId]: { panes, activePaneId } }, panes: [], activePaneId: null })
+    },
+
+    takeParked: (workspaceId) => {
+      const group = get().parked[workspaceId]
+      if (!group) return false
+      const rest = { ...get().parked }
+      delete rest[workspaceId]
+      set({ panes: group.panes, activePaneId: group.activePaneId, parked: rest })
+      return true
+    },
+
+    discardParked: (workspaceId) => {
+      const group = get().parked[workspaceId]
+      if (!group) return
+      for (const pane of group.panes) {
+        window.agentgrid.terminal.kill(pane.id)
+        terminalRegistry.remove(pane.id)
+      }
+      const rest = { ...get().parked }
+      delete rest[workspaceId]
+      set({ parked: rest })
+    },
 
     launch: async ({
       cwd,

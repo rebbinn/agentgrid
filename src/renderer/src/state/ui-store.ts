@@ -7,7 +7,6 @@ export type AppDialog =
   | { kind: 'new-workspace' }
   | { kind: 'rename-workspace'; id: string }
   | { kind: 'delete-workspace'; id: string }
-  | { kind: 'switch-workspace'; id: string }
   | { kind: 'settings' }
   | { kind: 'launch' }
   | { kind: 'preset-editor'; id: string | null }

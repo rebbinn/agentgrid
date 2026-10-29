@@ -9,6 +9,7 @@ import { useProjectStore } from '../../src/renderer/src/state/project-store'
 import { useSessionsStore } from '../../src/renderer/src/state/sessions-store'
 import { useTerminalStore } from '../../src/renderer/src/state/terminal-store'
 import { useUiStore } from '../../src/renderer/src/state/ui-store'
+import { deleteWorkspace } from '../../src/renderer/src/state/workspace-actions'
 import { useWorkspaceStore } from '../../src/renderer/src/state/workspace-store'
 import {
   defaultAppState,
@@ -85,7 +86,7 @@ beforeEach(() => {
   resetAppInfoCache()
   resetPersistenceForTests()
   fakeRegistry.reset()
-  useTerminalStore.setState({ panes: [], activePaneId: null })
+  useTerminalStore.setState({ panes: [], activePaneId: null, parked: {} })
   useLayoutStore.setState({ preset: 'auto', focusMode: false, columnSizes: [], rowSizes: [] })
   useProjectStore.setState({ projectPath: null, recentPaths: [] })
   useSessionsStore.setState({ sessions: [], status: 'idle', showAll: false, query: '' })
@@ -350,35 +351,66 @@ describe('switching', () => {
     expect(screen.getByText('C:\\work\\blog', { selector: '.statusbar__item' })).toBeTruthy()
   })
 
-  it('asks first when terminals are running, and says how many', async () => {
+  async function startFirstWorkspaceTerminal(): Promise<string> {
     await openApp()
     fireEvent.click(screen.getByRole('button', { name: 'Hamısını başlat' }))
     await waitFor(() => expect(useTerminalStore.getState().panes[0]?.status).toBe('running'))
-    chooseWorkspace(/Blog/)
-    const dialog = screen.getByRole('alertdialog', { name: 'İş sahəsi dəyişdirilsin?' })
-    expect(dialog.textContent).toContain('Hazırkı iş sahəsində 1 işləyən terminal var')
-    expect(dialog.textContent).toContain('"Blog" iş sahəsinə keçsəniz')
-  })
+    return useTerminalStore.getState().panes[0]!.id
+  }
 
-  it('stays where it is when switching is cancelled', async () => {
-    await openApp()
-    fireEvent.click(screen.getByRole('button', { name: 'Hamısını başlat' }))
-    await waitFor(() => expect(useTerminalStore.getState().panes[0]?.status).toBe('running'))
+  it('switches without asking and without stopping the running terminals', async () => {
+    const running = await startFirstWorkspaceTerminal()
     chooseWorkspace(/Blog/)
-    fireEvent.click(screen.getByRole('button', { name: 'Ləğv et' }))
-    expect(useWorkspaceStore.getState().activeId).toBe(ID_A)
-    expect(api.terminal.kill).not.toHaveBeenCalled()
-  })
-
-  it('stops the running terminals and switches after confirmation', async () => {
-    await openApp()
-    fireEvent.click(screen.getByRole('button', { name: 'Hamısını başlat' }))
-    await waitFor(() => expect(useTerminalStore.getState().panes[0]?.status).toBe('running'))
-    const running = useTerminalStore.getState().panes[0]!.id
-    chooseWorkspace(/Blog/)
-    fireEvent.click(screen.getByRole('button', { name: 'Dayandır və keç' }))
     await waitFor(() => expect(useWorkspaceStore.getState().activeId).toBe(ID_B))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(api.terminal.kill).not.toHaveBeenCalledWith(running)
+    expect(useTerminalStore.getState().parked[ID_A]?.panes[0]?.status).toBe('running')
+    expect(useTerminalStore.getState().panes.map((pane) => pane.status)).toEqual(['idle', 'idle'])
+  })
+
+  it('gives the same running terminal back when returning to the workspace', async () => {
+    const running = await startFirstWorkspaceTerminal()
+    chooseWorkspace(/Blog/)
+    await waitFor(() => expect(useWorkspaceStore.getState().activeId).toBe(ID_B))
+    chooseWorkspace(/Shop/)
+    await waitFor(() => expect(useWorkspaceStore.getState().activeId).toBe(ID_A))
+    const [pane] = useTerminalStore.getState().panes
+    expect(pane?.id).toBe(running)
+    expect(pane?.status).toBe('running')
+    expect(useTerminalStore.getState().parked[ID_B]).toBeUndefined()
+    expect(api.terminal.kill).not.toHaveBeenCalledWith(running)
+  })
+
+  it('shows how many terminals keep running in the other workspace', async () => {
+    await startFirstWorkspaceTerminal()
+    chooseWorkspace(/Blog/)
+    await waitFor(() => expect(useWorkspaceStore.getState().activeId).toBe(ID_B))
+    const list = screen.getByRole('region', { name: 'İş sahələri' })
+    expect(within(list).getByRole('button', { name: /Shop/ }).textContent).toContain('1 işləyir')
+  })
+
+  it('notices when a terminal in the other workspace exits', async () => {
+    const running = await startFirstWorkspaceTerminal()
+    chooseWorkspace(/Blog/)
+    await waitFor(() => expect(useWorkspaceStore.getState().activeId).toBe(ID_B))
+    useTerminalStore.getState().handleExit({ id: running, exitCode: 0 })
+    expect(useTerminalStore.getState().parked[ID_A]?.panes[0]?.status).toBe('exited')
+  })
+
+  it('does not keep terminals that never started', async () => {
+    await openApp()
+    chooseWorkspace(/Blog/)
+    await waitFor(() => expect(useWorkspaceStore.getState().activeId).toBe(ID_B))
+    expect(useTerminalStore.getState().parked).toEqual({})
+  })
+
+  it('stops the parked terminals when their workspace is deleted', async () => {
+    const running = await startFirstWorkspaceTerminal()
+    chooseWorkspace(/Blog/)
+    await waitFor(() => expect(useWorkspaceStore.getState().activeId).toBe(ID_B))
+    await deleteWorkspace(ID_A)
     expect(api.terminal.kill).toHaveBeenCalledWith(running)
+    expect(useTerminalStore.getState().parked).toEqual({})
   })
 
   it('switches from the sidebar list as well', async () => {

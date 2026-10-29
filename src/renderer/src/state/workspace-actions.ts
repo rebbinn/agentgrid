@@ -3,8 +3,7 @@ import { strings } from '../strings'
 import { captureLayout, useLayoutStore } from './layout-store'
 import { withPersistencePaused } from './persistence-gate'
 import { useProjectStore } from './project-store'
-import { capturePanes, useTerminalStore } from './terminal-store'
-import { useUiStore } from './ui-store'
+import { capturePanes, countRunning, useTerminalStore } from './terminal-store'
 import {
   emptyWorkspace,
   suggestWorkspaceName,
@@ -27,18 +26,21 @@ export function syncActiveWorkspace(): void {
   if (activeId) updateWorkspace(activeId, captureLive())
 }
 
-export function runningPaneCount(): number {
-  return useTerminalStore
-    .getState()
-    .panes.filter((pane) => pane.status === 'running' || pane.status === 'starting').length
+export function runningPaneCount(workspaceId: string): number {
+  const { panes, parked } = useTerminalStore.getState()
+  if (workspaceId === useWorkspaceStore.getState().activeId) return countRunning(panes)
+  return countRunning(parked[workspaceId]?.panes ?? [])
 }
 
-export async function applyWorkspace(workspace: Workspace): Promise<void> {
-  useTerminalStore.getState().reset()
+export async function applyWorkspace(workspace: Workspace, leavingId: string | null = null): Promise<void> {
+  const terminals = useTerminalStore.getState()
+  if (leavingId) terminals.parkPanes(leavingId)
+  else terminals.reset()
   useProjectStore.getState().setProject(workspace.projectPath)
   useLayoutStore.getState().applyLayout(workspace.layout)
   useWorkspaceStore.getState().setActiveId(workspace.id)
-  await useTerminalStore.getState().restorePanes(workspace.panes, workspace.activePane, workspace.autoStart)
+  if (terminals.takeParked(workspace.id)) return
+  await terminals.restorePanes(workspace.panes, workspace.activePane, workspace.autoStart)
 }
 
 export function nextWorkspaceName(): string {
@@ -48,15 +50,6 @@ export function nextWorkspaceName(): string {
   )
 }
 
-export function requestWorkspaceSwitch(id: string): void {
-  if (id === useWorkspaceStore.getState().activeId) return
-  if (runningPaneCount() > 0) {
-    useUiStore.getState().openDialog({ kind: 'switch-workspace', id })
-    return
-  }
-  void switchWorkspace(id)
-}
-
 export async function switchWorkspace(id: string): Promise<void> {
   const { workspaces, activeId } = useWorkspaceStore.getState()
   const target = workspaces.find((item) => item.id === id)
@@ -64,16 +57,17 @@ export async function switchWorkspace(id: string): Promise<void> {
   await withPersistencePaused(async () => {
     syncActiveWorkspace()
     const fresh = useWorkspaceStore.getState().workspaces.find((item) => item.id === id) ?? target
-    await applyWorkspace(fresh)
+    await applyWorkspace(fresh, activeId)
   })
 }
 
 export async function createWorkspace(name: string): Promise<void> {
   await withPersistencePaused(async () => {
+    const leavingId = useWorkspaceStore.getState().activeId
     syncActiveWorkspace()
     const created = emptyWorkspace(name)
     useWorkspaceStore.getState().add(created)
-    await applyWorkspace(created)
+    await applyWorkspace(created, leavingId)
   })
 }
 
@@ -83,6 +77,7 @@ export async function deleteWorkspace(id: string): Promise<void> {
     const index = store.workspaces.findIndex((item) => item.id === id)
     if (index === -1) return
     if (id !== store.activeId) {
+      useTerminalStore.getState().discardParked(id)
       store.remove(id)
       return
     }

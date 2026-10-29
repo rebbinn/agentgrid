@@ -8,7 +8,7 @@ import { launchPreset, launchTerminal, openClaudeSession, pickProjectFolder } fr
 import { useLayoutStore } from '../state/layout-store'
 import { useTerminalStore, type Pane } from '../state/terminal-store'
 import { useUiStore } from '../state/ui-store'
-import { requestWorkspaceSwitch } from '../state/workspace-actions'
+import { switchWorkspace } from '../state/workspace-actions'
 import { strings } from '../strings'
 import {
   closeActivePane,
@@ -210,7 +210,7 @@ export function buildCommands(context: CommandContext): Command[] {
       title: strings.commands.switchWorkspace(workspace.name),
       group: group.workspace,
       keywords: `workspace ${workspace.projectPath ?? ''}`,
-      run: () => requestWorkspaceSwitch(workspace.id)
+      run: () => void switchWorkspace(workspace.id)
     })
   }
   add({

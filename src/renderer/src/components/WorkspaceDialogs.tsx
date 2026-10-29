@@ -5,8 +5,7 @@ import {
   deleteWorkspace,
   nextWorkspaceName,
   renameWorkspace,
-  runningPaneCount,
-  switchWorkspace
+  runningPaneCount
 } from '../state/workspace-actions'
 import { useWorkspaceStore } from '../state/workspace-store'
 import { strings } from '../strings'
@@ -21,7 +20,6 @@ export function WorkspaceDialogs() {
   const dialog = useUiStore((state) => state.dialog)
   const closeDialog = useUiStore((state) => state.closeDialog)
   const workspaces = useWorkspaceStore((state) => state.workspaces)
-  const activeId = useWorkspaceStore((state) => state.activeId)
   const texts = strings.workspace.dialogs
 
   if (!dialog) return null
@@ -77,7 +75,7 @@ export function WorkspaceDialogs() {
   }
 
   if (dialog.kind === 'delete-workspace') {
-    const running = target.id === activeId ? runningPaneCount() : 0
+    const running = runningPaneCount(target.id)
     return (
       <ConfirmDialog
         title={texts.deleteTitle}
@@ -93,18 +91,5 @@ export function WorkspaceDialogs() {
     )
   }
 
-  return (
-    <ConfirmDialog
-      title={texts.switchTitle}
-      text={texts.switchText(runningPaneCount(), target.name)}
-      confirmLabel={texts.switch}
-      cancelLabel={texts.cancel}
-      confirmTone="primary"
-      onCancel={closeDialog}
-      onConfirm={() => {
-        closeDialog()
-        void switchWorkspace(target.id)
-      }}
-    />
-  )
+  return null
 }

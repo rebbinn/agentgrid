@@ -1,8 +1,8 @@
 import { folderName } from '../lib/path'
 import { useProjectStore } from '../state/project-store'
-import { useTerminalStore } from '../state/terminal-store'
+import { countRunning, useTerminalStore } from '../state/terminal-store'
 import { useUiStore } from '../state/ui-store'
-import { requestWorkspaceSwitch } from '../state/workspace-actions'
+import { switchWorkspace } from '../state/workspace-actions'
 import { useWorkspaceStore } from '../state/workspace-store'
 import { strings } from '../strings'
 import { Dropdown, type DropdownItem } from './Dropdown'
@@ -12,6 +12,8 @@ export function WorkspaceSwitcher() {
   const workspaces = useWorkspaceStore((state) => state.workspaces)
   const activeId = useWorkspaceStore((state) => state.activeId)
   const livePaneCount = useTerminalStore((state) => state.panes.length)
+  const liveRunning = useTerminalStore((state) => countRunning(state.panes))
+  const parked = useTerminalStore((state) => state.parked)
   const liveProject = useProjectStore((state) => state.projectPath)
   const openDialog = useUiStore((state) => state.openDialog)
   const active = workspaces.find((item) => item.id === activeId)
@@ -20,15 +22,18 @@ export function WorkspaceSwitcher() {
     ...workspaces.map(
       (item): DropdownItem => {
         const isActive = item.id === activeId
-        const paneCount = isActive ? livePaneCount : item.panes.length
+        const group = parked[item.id]
+        const paneCount = isActive ? livePaneCount : (group?.panes.length ?? item.panes.length)
+        const running = isActive ? liveRunning : countRunning(group?.panes ?? [])
         const project = isActive ? liveProject : item.projectPath
+        const runningPart = running > 0 ? `${strings.workspace.runningCount(running)} · ` : ''
         return {
           id: item.id,
           label: item.name,
-          hint: `${strings.workspace.paneCount(paneCount)} · ${project ? folderName(project) : strings.workspace.noProject}`,
+          hint: `${strings.workspace.paneCount(paneCount)} · ${runningPart}${project ? folderName(project) : strings.workspace.noProject}`,
           role: 'menuitemradio',
           checked: isActive,
-          onSelect: () => requestWorkspaceSwitch(item.id)
+          onSelect: () => void switchWorkspace(item.id)
         }
       }
     ),
