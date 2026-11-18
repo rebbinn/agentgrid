@@ -43,6 +43,7 @@ import {
   type SshResult
 } from '@shared/ssh'
 import {
+  EditPathRequestSchema,
   LocalListRequestSchema,
   LocalPathRequestSchema,
   SftpCloseSchema,
@@ -71,6 +72,10 @@ export interface IpcServices {
     places(): LocalPlaces
     pickFiles(): Promise<LocalPickResult>
     reveal(path: string): void
+    editPath(name: string): Promise<string>
+    openInEditor(path: string): Promise<boolean>
+    watch(path: string): void
+    unwatch(path: string): void
   }
   getShells(): Promise<ShellDefinition[]>
   listSessions(): Promise<ClaudeSession[]>
@@ -325,6 +330,31 @@ export function registerIpc(
     guard(event)
     const parsed = LocalPathRequestSchema.safeParse(payload)
     if (parsed.success) services.local.reveal(parsed.data.path)
+  })
+
+  ipcMain.handle(IpcChannel.localEditPath, async (event, payload: unknown): Promise<{ path: string }> => {
+    guard(event)
+    const parsed = EditPathRequestSchema.safeParse(payload)
+    if (!parsed.success) throw new Error('Invalid file name')
+    return { path: await services.local.editPath(parsed.data.name) }
+  })
+
+  ipcMain.handle(IpcChannel.localOpenInEditor, async (event, payload: unknown): Promise<boolean> => {
+    guard(event)
+    const parsed = LocalPathRequestSchema.safeParse(payload)
+    return parsed.success ? services.local.openInEditor(parsed.data.path) : false
+  })
+
+  ipcMain.on(IpcChannel.localWatch, (event, payload: unknown) => {
+    if (!isTrusted(event)) return
+    const parsed = LocalPathRequestSchema.safeParse(payload)
+    if (parsed.success) services.local.watch(parsed.data.path)
+  })
+
+  ipcMain.on(IpcChannel.localUnwatch, (event, payload: unknown) => {
+    if (!isTrusted(event)) return
+    const parsed = LocalPathRequestSchema.safeParse(payload)
+    if (parsed.success) services.local.unwatch(parsed.data.path)
   })
 
   ipcMain.handle(IpcChannel.externalOpen, async (event, payload: unknown): Promise<boolean> => {

@@ -108,6 +108,7 @@ type command struct {
 	LocalPath  string          `json:"localPath"`
 	RemotePath string          `json:"remotePath"`
 	Overwrite  bool            `json:"overwrite"`
+	Resume     bool            `json:"resume"`
 }
 
 func (c *command) modeName() string {

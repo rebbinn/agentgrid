@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { hasNoControlCharacters } from './command-text'
 import { SshFailureSchema } from './ssh'
 
 export const MAX_REMOTE_PATH = 4096
@@ -99,7 +100,8 @@ export const TransferRequestSchema = z.object({
   direction: z.enum(['upload', 'download']),
   localPath: LocalPathSchema,
   remotePath: RemotePathSchema,
-  overwrite: z.boolean()
+  overwrite: z.boolean(),
+  resume: z.boolean().optional()
 })
 export type TransferRequest = z.infer<typeof TransferRequestSchema>
 
@@ -121,6 +123,16 @@ export const LocalPlacesSchema = z.object({
 export type LocalPlaces = z.infer<typeof LocalPlacesSchema>
 
 export const LocalPathRequestSchema = z.object({ path: LocalPathSchema })
+export const EditPathRequestSchema = z.object({
+  name: z
+    .string()
+    .min(1)
+    .max(MAX_FILE_NAME)
+    .refine((name) => hasNoControlCharacters(name) && !/[<>:"/\\|?*]/.test(name) && name !== '.' && name !== '..')
+})
+export const EditPathResultSchema = z.object({ path: z.string().max(MAX_LOCAL_PATH) })
+export const LocalChangedEventSchema = z.object({ path: z.string().max(MAX_LOCAL_PATH) })
+export type LocalChangedEvent = z.infer<typeof LocalChangedEventSchema>
 export const LocalPickResultSchema = z.object({ paths: z.array(z.string().max(MAX_LOCAL_PATH)).max(1000) })
 export type LocalPickResult = z.infer<typeof LocalPickResultSchema>
 

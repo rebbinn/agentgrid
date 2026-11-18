@@ -12,8 +12,7 @@ import { terminalRegistry } from '../terminal/registry'
 import type { HostView } from '@shared/hosts'
 import { findHostView, useHostsStore } from './hosts-store'
 import { useLayoutStore } from './layout-store'
-import { initSftpPane } from './sftp-actions'
-import { useSftpStore } from './sftp-store'
+import { forgetSftpPane, initSftpPane } from './sftp-actions'
 import { useSshStore } from './ssh-store'
 import { usePrefsStore } from './prefs-store'
 import { useUiStore } from './ui-store'
@@ -299,6 +298,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
         if (step === 'reset') get().resetFontSize(id)
         else get().adjustFontSize(id, step)
       }
+      managed.onCwd = (path) => useSshStore.getState().setCwd(id, path)
       const title = nextPaneTitle(
         shortenTitle(view.host.name),
         get().panes.map((pane) => pane.title)
@@ -523,6 +523,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
             if (step === 'reset') get().resetFontSize(id)
             else get().adjustFontSize(id, step)
           }
+          if (entry.sshHostId) managed.onCwd = (path) => useSshStore.getState().setCwd(id, path)
         }
         return {
           id,
@@ -561,7 +562,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
       window.agentgrid.terminal.kill(id)
       terminalRegistry.remove(id)
       useSshStore.getState().forget(id)
-      useSftpStore.getState().forget(id)
+      forgetSftpPane(id)
       const remaining = panes.filter((pane) => pane.id !== id)
       const nextActive =
         activePaneId === id ? (remaining[Math.min(index, remaining.length - 1)]?.id ?? null) : activePaneId

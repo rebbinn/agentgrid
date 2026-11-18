@@ -81,7 +81,14 @@ export function createAgentGridMock() {
         .mockResolvedValue({ home: 'C:\\Users\\me', downloads: 'C:\\Users\\me\\Downloads', drives: ['C:\\'] }),
       pickFiles: vi.fn<AgentGridApi['local']['pickFiles']>().mockResolvedValue({ paths: [] }),
       reveal: vi.fn<AgentGridApi['local']['reveal']>().mockResolvedValue(undefined),
-      pathForFile: vi.fn<AgentGridApi['local']['pathForFile']>(() => '')
+      pathForFile: vi.fn<AgentGridApi['local']['pathForFile']>(() => ''),
+      editPath: vi
+        .fn<AgentGridApi['local']['editPath']>()
+        .mockImplementation(async (name: string) => `C:\\Temp\\AgentGrid\\edit\\x\\${name}`),
+      openInEditor: vi.fn<AgentGridApi['local']['openInEditor']>().mockResolvedValue(true),
+      watch: vi.fn<AgentGridApi['local']['watch']>(),
+      unwatch: vi.fn<AgentGridApi['local']['unwatch']>(),
+      onChanged: vi.fn<AgentGridApi['local']['onChanged']>(() => () => undefined)
     }
   } satisfies AgentGridApi
 }

@@ -19,6 +19,7 @@ interface TransferCommand<Op extends string> {
   localPath: string
   remotePath: string
   overwrite: boolean
+  resume?: boolean
 }
 
 export type HelperCommand =

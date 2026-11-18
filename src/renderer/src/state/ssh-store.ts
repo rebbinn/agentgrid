@@ -10,6 +10,8 @@ interface SshState {
   requests: Record<string, SshRequestEvent>
   phases: Record<string, SshPhase>
   latency: Record<string, number>
+  cwd: Record<string, string>
+  setCwd: (sessionId: string, path: string) => void
   handleEvent: (event: SshEvent) => void
   resolveRequest: (sessionId: string) => void
   forget: (sessionId: string) => void
@@ -26,6 +28,10 @@ export const useSshStore = create<SshState>((set) => ({
   requests: {},
   phases: {},
   latency: {},
+  cwd: {},
+
+  setCwd: (sessionId, path) =>
+    set((state) => (state.cwd[sessionId] === path ? state : { cwd: { ...state.cwd, [sessionId]: path } })),
 
   handleEvent: (event) => {
     switch (event.kind) {
@@ -50,7 +56,8 @@ export const useSshStore = create<SshState>((set) => ({
     set((state) => ({
       requests: without(state.requests, sessionId),
       phases: without(state.phases, sessionId),
-      latency: without(state.latency, sessionId)
+      latency: without(state.latency, sessionId),
+      cwd: without(state.cwd, sessionId)
     }))
 }))
 

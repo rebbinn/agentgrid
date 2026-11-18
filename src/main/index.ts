@@ -9,6 +9,7 @@ import { listClaudeSessions } from './claude-sessions'
 import { findOnPath } from './executables'
 import { HostsService } from './hosts-service'
 import { HostsStore } from './hosts-store'
+import { LocalEditing } from './local-editing'
 import { listDrives, listLocalDirectory } from './local-files'
 import { registerIpc } from './ipc'
 import { buildJumpList } from './jump-list'
@@ -232,9 +233,19 @@ const hostsService = new HostsService({
   newId: () => crypto.randomUUID()
 })
 
+const localEditing = new LocalEditing({
+  tempDir: app.getPath('temp'),
+  windowsDir: process.env['SystemRoot'] ?? 'C:\\Windows',
+  findOnPath: (name) => findOnPath(name, discoveryDeps),
+  emitChanged: (path) => sendToWindow(IpcChannel.localChanged, { path }),
+  newId: () => crypto.randomUUID(),
+  ...(!app.isPackaged && process.env['AGENTGRID_EDITOR'] ? { editorOverride: process.env['AGENTGRID_EDITOR'] } : {})
+})
+
 function stopAllTerminals(): void {
   terminals.killAll()
   sshService.cancelAll()
+  localEditing.unwatchAll()
 }
 
 function installSecurityPolicies(): void {
@@ -403,7 +414,11 @@ if (!hasLock) {
             const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
             return { paths: result.canceled ? [] : result.filePaths }
           }),
-        reveal: (path) => shell.showItemInFolder(path)
+        reveal: (path) => shell.showItemInFolder(path),
+        editPath: (name) => localEditing.editPath(name),
+        openInEditor: (path) => localEditing.openInEditor(path),
+        watch: (path) => localEditing.watch(path),
+        unwatch: (path) => localEditing.unwatch(path)
       },
       getShells,
       listSessions,

@@ -3,6 +3,7 @@ import { AGENT_IDS } from './agents'
 import type { HostSaveRequest, HostSaveResult, HostView, HostsTransferResult, KeyPickResult } from './hosts'
 import { CommandLineSchema, type AppState, type LoadedSettings } from './settings'
 import type {
+  LocalChangedEvent,
   LocalListResult,
   LocalPickResult,
   LocalPlaces,
@@ -58,7 +59,12 @@ export const IpcChannel = {
   localList: 'local:list',
   localPlaces: 'local:places',
   localPickFiles: 'local:pick-files',
-  localReveal: 'local:reveal'
+  localReveal: 'local:reveal',
+  localEditPath: 'local:edit-path',
+  localOpenInEditor: 'local:open-in-editor',
+  localWatch: 'local:watch',
+  localUnwatch: 'local:unwatch',
+  localChanged: 'local:changed'
 } as const
 
 export type IpcChannelName = (typeof IpcChannel)[keyof typeof IpcChannel]
@@ -270,5 +276,10 @@ export interface AgentGridApi {
     pickFiles(): Promise<LocalPickResult>
     reveal(path: string): Promise<void>
     pathForFile(file: File): string
+    editPath(name: string): Promise<string>
+    openInEditor(path: string): Promise<boolean>
+    watch(path: string): void
+    unwatch(path: string): void
+    onChanged(listener: (event: LocalChangedEvent) => void): () => void
   }
 }

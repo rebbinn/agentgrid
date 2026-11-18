@@ -255,7 +255,8 @@ export class SshService {
         tid: request.transferId,
         localPath: request.localPath,
         remotePath: request.remotePath,
-        overwrite: request.overwrite
+        overwrite: request.overwrite,
+        ...(request.resume ? { resume: true } : {})
       })
     if (sent && session) {
       session.transfers.add(request.transferId)

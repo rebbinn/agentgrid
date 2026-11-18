@@ -40,13 +40,29 @@ export interface TransferItem {
   error?: SftpError
   speed: number
   updatedAt: number
+  purpose?: 'edit-open' | 'edit-save'
+}
+
+export interface EditSession {
+  paneId: string
+  name: string
+  remotePath: string
+  localPath: string
+  state: 'downloading' | 'watching' | 'uploading'
+  dirty: boolean
 }
 
 interface SftpState {
   listings: Record<string, Record<Side, Listing>>
   transfers: TransferItem[]
+  edits: EditSession[]
+  follow: Record<string, boolean>
   setListing: (paneId: string, side: Side, patch: Partial<Listing>) => void
   addTransfers: (items: TransferItem[]) => void
+  removeTransfer: (id: string) => void
+  setEdit: (localPath: string, patch: Partial<EditSession> | null) => void
+  addEdit: (edit: EditSession) => void
+  setFollow: (paneId: string, follow: boolean) => void
   handleEvent: (event: SftpEvent, now: number) => TransferItem | null
   clearFinished: (paneId: string) => void
   forget: (paneId: string) => void
@@ -61,6 +77,8 @@ const SPEED_SMOOTHING = 0.35
 export const useSftpStore = create<SftpState>((set, get) => ({
   listings: {},
   transfers: [],
+  edits: [],
+  follow: {},
 
   setListing: (paneId, side, patch) =>
     set((state) => {
@@ -69,6 +87,21 @@ export const useSftpStore = create<SftpState>((set, get) => ({
     }),
 
   addTransfers: (items) => set((state) => ({ transfers: [...state.transfers, ...items] })),
+
+  removeTransfer: (id) => set((state) => ({ transfers: state.transfers.filter((item) => item.id !== id) })),
+
+  addEdit: (edit) =>
+    set((state) => ({ edits: [...state.edits.filter((item) => item.localPath !== edit.localPath), edit] })),
+
+  setEdit: (localPath, patch) =>
+    set((state) => ({
+      edits:
+        patch === null
+          ? state.edits.filter((item) => item.localPath !== localPath)
+          : state.edits.map((item) => (item.localPath === localPath ? { ...item, ...patch } : item))
+    })),
+
+  setFollow: (paneId, follow) => set((state) => ({ follow: { ...state.follow, [paneId]: follow } })),
 
   handleEvent: (event, now) => {
     if (event.kind === 'sftp-closed') return null
@@ -109,7 +142,14 @@ export const useSftpStore = create<SftpState>((set, get) => ({
     set((state) => {
       const listings = { ...state.listings }
       delete listings[paneId]
-      return { listings, transfers: state.transfers.filter((item) => item.paneId !== paneId) }
+      const follow = { ...state.follow }
+      delete follow[paneId]
+      return {
+        listings,
+        follow,
+        transfers: state.transfers.filter((item) => item.paneId !== paneId),
+        edits: state.edits.filter((item) => item.paneId !== paneId)
+      }
     })
 }))
 

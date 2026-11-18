@@ -29,11 +29,23 @@ export function zoomStepForKey(code: string): ZoomStep | null {
   return null
 }
 
+export function cwdFromOsc7(data: string): string | null {
+  try {
+    const url = new URL(data)
+    if (url.protocol !== 'file:') return null
+    const path = decodeURIComponent(url.pathname)
+    return path.startsWith('/') ? path : null
+  } catch {
+    return null
+  }
+}
+
 export class ManagedTerminal {
   readonly term: Terminal
   spawnRequested = false
   alive = false
   onZoom: (step: ZoomStep) => void = () => undefined
+  onCwd: (path: string) => void = () => undefined
 
   private readonly fitAddon = new FitAddon()
   private container: HTMLElement | null = null
@@ -69,6 +81,11 @@ export class ManagedTerminal {
       if (this.alive) window.agentgrid.terminal.write(this.id, data)
     })
     this.term.attachCustomKeyEventHandler((event) => this.handleKey(event))
+    this.term.parser.registerOscHandler(7, (data) => {
+      const path = cwdFromOsc7(data)
+      if (path) this.onCwd(path)
+      return true
+    })
   }
 
   attach(container: HTMLElement): void {

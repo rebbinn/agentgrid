@@ -1,18 +1,25 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Host } from '@shared/hosts'
 import { isValidFileName, joinLocal, joinRemote } from '@shared/sftp'
 import { formatBytes, formatDuration } from '../lib/format'
 import {
+  canResume,
   cancelTransfer,
   findConflicts,
+  navigate,
+  openForEditing,
   planTransfers,
   planUploadOfPaths,
   remoteOperation,
+  resumeTransfer,
   startTransfers,
+  stopEditing,
   type PlannedTransfer
 } from '../state/sftp-actions'
 import { isDirectoryLike, useSftpStore, type FileEntry, type Side, type TransferItem } from '../state/sftp-store'
+import { useSshStore } from '../state/ssh-store'
+import { useTerminalStore } from '../state/terminal-store'
 import { useUiStore } from '../state/ui-store'
 import { strings } from '../strings'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -81,12 +88,52 @@ function TransferRow({ item }: { item: TransferItem }) {
           t.failed(item.error ? strings.sftp.errors[item.error.code] : '')
         )}
       </span>
+      {canResume(item) && (
+        <button
+          type="button"
+          className="icon-button"
+          aria-label={texts.resumeLabel(item.name)}
+          title={texts.resume}
+          onClick={() => resumeTransfer(item)}
+        >
+          <Icon name="restart" size={12} />
+        </button>
+      )}
       {item.state === 'running' && (
         <button type="button" className="icon-button" aria-label={t.cancel(item.name)} title={t.cancel(item.name)} onClick={() => cancelTransfer(item)}>
           <Icon name="close" size={12} />
         </button>
       )}
     </li>
+  )
+}
+
+function EditList({ paneId }: { paneId: string }) {
+  const edits = useSftpStore((state) => state.edits)
+  const mine = edits.filter((edit) => edit.paneId === paneId)
+  if (mine.length === 0) return null
+  const t = texts.editing
+  return (
+    <section className="sftp-edits" aria-label={t.label}>
+      {mine.map((edit) => (
+        <div key={edit.localPath} className="sftp-edit" data-state={edit.state}>
+          <Icon name="edit" size={13} />
+          <span className="sftp-edit__name" title={edit.remotePath}>
+            {edit.name}
+          </span>
+          <span className="sftp-edit__state">{t[edit.state]}</span>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={t.stop(edit.name)}
+            title={t.stop(edit.name)}
+            onClick={() => stopEditing(edit)}
+          >
+            <Icon name="close" size={12} />
+          </button>
+        </div>
+      ))}
+    </section>
   )
 }
 
@@ -121,6 +168,21 @@ export function SftpView({ paneId, host }: { paneId: string; host: Host | undefi
   const [dialog, setDialog] = useState<SftpDialog | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const closeMenu = useCallback(() => setMenu(null), [])
+  const follow = useSftpStore((state) => state.follow[paneId] === true)
+  const followId = useTerminalStore((state) => {
+    const pane = state.panes.find((candidate) => candidate.id === paneId)
+    if (!pane?.sftpHostId) return undefined
+    const running = state.panes.filter(
+      (candidate) => candidate.sshHostId === pane.sftpHostId && candidate.status === 'running'
+    )
+    return (running.find((candidate) => candidate.id === pane.sftpViaId) ?? running[0])?.id
+  })
+  const terminalCwd = useSshStore((state) => (followId ? state.cwd[followId] : undefined))
+  const remotePath = listings?.remote.path
+
+  useEffect(() => {
+    if (follow && terminalCwd && terminalCwd !== remotePath) void navigate(paneId, 'remote', terminalCwd)
+  }, [follow, terminalCwd, remotePath, paneId])
 
   if (!listings) return null
   const { local, remote } = listings
@@ -172,7 +234,11 @@ export function SftpView({ paneId, host }: { paneId: string; host: Host | undefi
       ]
     }
     const single = names.length === 1 ? entriesOf('remote', names)[0] : undefined
+    const editable = single && !isDirectoryLike(single) ? single : undefined
     return [
+      ...(editable
+        ? [{ id: 'edit', label: texts.editInEditor, icon: <Icon name="edit" size={14} />, onSelect: () => void openForEditing(paneId, editable) }]
+        : []),
       ...(names.length > 0
         ? [{ id: 'download', label: texts.download, icon: <Icon name="download" size={14} />, onSelect: () => transferNames('remote', names) }]
         : [{ id: 'mkdir', label: texts.newFolder, onSelect: () => setDialog({ kind: 'mkdir' }) }]),
@@ -231,6 +297,17 @@ export function SftpView({ paneId, host }: { paneId: string; host: Host | undefi
           listing={remote}
           toolbar={
             <>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={texts.follow}
+                title={terminalCwd ? texts.follow : texts.followUnavailable}
+                aria-pressed={follow}
+                disabled={!terminalCwd}
+                onClick={() => useSftpStore.getState().setFollow(paneId, !follow)}
+              >
+                <Icon name="link" size={14} />
+              </button>
               <button type="button" className="icon-button" aria-label={texts.newFolder} title={texts.newFolder} onClick={() => setDialog({ kind: 'mkdir' })}>
                 <Icon name="plus" size={14} />
               </button>
@@ -259,6 +336,7 @@ export function SftpView({ paneId, host }: { paneId: string; host: Host | undefi
         />
       </div>
 
+      <EditList paneId={paneId} />
       <TransferQueue paneId={paneId} />
 
       {createPortal(

@@ -115,6 +115,13 @@ Rules:
 - Use concurrent reads and writes (pkg/sftp `UseConcurrentReads`, `UseConcurrentWrites`, up to 64 requests per file) so large files move at network speed.
 - Closing the session cancels its transfers (each gets `transfer-done` with `cancelled`).
 
+### Resuming
+
+`sftp-upload` and `sftp-download` take an optional `resume` (bool, default false).
+- A transfer that ends because the connection dropped (`transfer-done` with code `connection`) keeps its part files on both sides. A cancelled transfer, or one that fails with any other code, still removes them.
+- With `resume: true`, a file whose `<name>.agentgrid-part` already exists at the destination continues from the part file's size instead of starting over. If the part file is larger than the source, it starts over. Files without a part file copy normally, and finished files are copied again only when `overwrite` is true.
+- With `resume: true`, `bytes` in the first `transfer` event already counts what the part files hold, so the progress bar does not jump back to zero.
+
 ## Behaviour
 
 - TCP connect timeout 15 s. Waiting for `answer` has no timeout (the user may be away); `close` cancels it.

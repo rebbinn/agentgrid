@@ -20,10 +20,21 @@ const posixRenameExtension = "posix-rename@openssh.com"
 
 var transferProgressInterval = 250 * time.Millisecond
 
+// Concurrent writes can leave holes behind a dropped connection; at most about 65 x 32 KiB
+// are in flight, so re-checking this much of an uploaded part against the source is enough.
+const uploadResumeCheckBytes = 4 << 20
+
 type plannedEntry struct {
-	rel   string
-	size  int64
-	mtime time.Time
+	rel        string
+	size       int64
+	mtime      time.Time
+	resumeFrom int64
+	skip       bool
+}
+
+type destinationState struct {
+	exists   bool
+	partSize int64
 }
 
 type transferPlan struct {
@@ -41,6 +52,7 @@ type transfer struct {
 	localRoot  string
 	remoteRoot string
 	overwrite  bool
+	resume     bool
 	ctx        context.Context
 	cancel     context.CancelCauseFunc
 	plan       transferPlan
@@ -86,6 +98,7 @@ func (f *sftpSession) startTransfer(cmd *command, tid opaqueID) {
 		localRoot:  cmd.LocalPath,
 		remoteRoot: f.resolve(cmd.RemotePath),
 		overwrite:  cmd.Overwrite,
+		resume:     cmd.Resume,
 		ctx:        ctx,
 		cancel:     cancel,
 	}
@@ -134,6 +147,9 @@ func (t *transfer) runToCompletion() (done transferDoneEvent) {
 	}()
 
 	err := t.makePlan()
+	if err == nil {
+		err = t.prepareDestination()
+	}
 	if err == nil {
 		stopProgress := make(chan struct{})
 		var progress sync.WaitGroup
@@ -388,10 +404,158 @@ func (t *transfer) localPathOf(rel string) string {
 	return filepath.Join(t.localRoot, filepath.FromSlash(rel))
 }
 
-func (t *transfer) execute() error {
-	if err := t.checkDestination(); err != nil {
+func (t *transfer) destinationOf(rel string) string {
+	if t.upload {
+		return t.remotePathOf(rel)
+	}
+	return t.localPathOf(rel)
+}
+
+func (t *transfer) destinationLstat(target string) (os.FileInfo, error) {
+	if t.upload {
+		return t.files.client.Lstat(target)
+	}
+	return os.Lstat(target)
+}
+
+func (t *transfer) listDestination(dir string) ([]os.FileInfo, error) {
+	if t.upload {
+		return t.files.client.ReadDir(dir)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	infos := make([]os.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		if info, err := entry.Info(); err == nil {
+			infos = append(infos, info)
+		}
+	}
+	return infos, nil
+}
+
+func (t *transfer) prepareDestination() error {
+	states, err := t.inspectDestination()
+	if err != nil {
 		return err
 	}
+	for i := range t.plan.files {
+		file := &t.plan.files[i]
+		state := states[file.rel]
+		if state.exists && !t.overwrite {
+			if !t.resume {
+				return destinationTaken(t.destinationOf(file.rel))
+			}
+			file.skip = true
+			t.moved.Add(file.size)
+			t.filesDone.Add(1)
+			continue
+		}
+		if !t.resume || state.partSize == 0 || state.partSize > file.size {
+			continue
+		}
+		resumeFrom := state.partSize
+		if t.upload {
+			if resumeFrom, err = t.verifiedUploadResumePoint(*file, state.partSize); err != nil {
+				return err
+			}
+		}
+		file.resumeFrom = resumeFrom
+		t.moved.Add(resumeFrom)
+	}
+	return nil
+}
+
+func (t *transfer) inspectDestination() (map[string]destinationState, error) {
+	states := make(map[string]destinationState)
+	root := t.destinationOf("")
+	rootInfo, err := t.destinationLstat(root)
+	rootExists := err == nil
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, atPath(root, err)
+	}
+	if rootExists && t.plan.folder != rootInfo.IsDir() {
+		return nil, destinationTaken(root)
+	}
+	if !t.plan.folder {
+		state := destinationState{exists: rootExists}
+		if t.resume {
+			if part, err := t.destinationLstat(root + partSuffix); err == nil && part.Mode().IsRegular() {
+				state.partSize = part.Size()
+			}
+		}
+		states[""] = state
+		return states, nil
+	}
+	if !rootExists || (t.overwrite && !t.resume) {
+		return states, nil
+	}
+	missing := make(map[string]bool)
+	for _, dir := range t.plan.dirs {
+		if err := t.stopped(); err != nil {
+			return nil, err
+		}
+		if dir.rel != "" && missing[parentRel(dir.rel)] {
+			missing[dir.rel] = true
+			continue
+		}
+		destinationDir := t.destinationOf(dir.rel)
+		children, err := t.listDestination(destinationDir)
+		if errors.Is(err, fs.ErrNotExist) {
+			missing[dir.rel] = true
+			continue
+		}
+		if err != nil {
+			return nil, atPath(destinationDir, err)
+		}
+		for _, child := range children {
+			rel := joinRel(dir.rel, child.Name())
+			state := states[rel]
+			state.exists = true
+			states[rel] = state
+			if base, isPart := strings.CutSuffix(rel, partSuffix); isPart && child.Mode().IsRegular() {
+				partOf := states[base]
+				partOf.partSize = child.Size()
+				states[base] = partOf
+			}
+		}
+	}
+	return states, nil
+}
+
+func (t *transfer) verifiedUploadResumePoint(file plannedEntry, partSize int64) (int64, error) {
+	start := max(0, partSize-uploadResumeCheckBytes)
+	part := t.remotePathOf(file.rel) + partSuffix
+	remote, err := t.files.client.Open(part)
+	if err != nil {
+		return 0, atPath(part, err)
+	}
+	defer remote.Close()
+	local, err := os.Open(t.localPathOf(file.rel))
+	if err != nil {
+		return 0, atPath(t.localPathOf(file.rel), err)
+	}
+	defer local.Close()
+
+	remoteTail := make([]byte, partSize-start)
+	remoteRead, err := remote.ReadAt(remoteTail, start)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return 0, atPath(part, err)
+	}
+	localTail := make([]byte, remoteRead)
+	localRead, err := local.ReadAt(localTail, start)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return 0, atPath(t.localPathOf(file.rel), err)
+	}
+	matching := 0
+	for matching < localRead && remoteTail[matching] == localTail[matching] {
+		matching++
+	}
+	return start + int64(matching), nil
+}
+
+func (t *transfer) execute() error {
 	for _, dir := range t.plan.dirs {
 		if err := t.stopped(); err != nil {
 			return err
@@ -401,6 +565,9 @@ func (t *transfer) execute() error {
 		}
 	}
 	for _, file := range t.plan.files {
+		if file.skip {
+			continue
+		}
 		if err := t.stopped(); err != nil {
 			return err
 		}
@@ -424,82 +591,6 @@ func (t *transfer) execute() error {
 
 func destinationTaken(where string) error {
 	return &fileOpError{code: codeExists, message: where + " already exists"}
-}
-
-func (t *transfer) checkDestination() error {
-	if t.upload {
-		return t.checkRemoteDestination()
-	}
-	return t.checkLocalDestination()
-}
-
-func (t *transfer) checkRemoteDestination() error {
-	client := t.files.client
-	info, err := client.Lstat(t.remoteRoot)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return atPath(t.remoteRoot, err)
-	}
-	if t.plan.folder != info.IsDir() || (!t.plan.folder && !t.overwrite) {
-		return destinationTaken(t.remoteRoot)
-	}
-	if !t.plan.folder || t.overwrite {
-		return nil
-	}
-	existing := make(map[string]bool)
-	missing := make(map[string]bool)
-	for _, dir := range t.plan.dirs {
-		if err := t.stopped(); err != nil {
-			return err
-		}
-		if dir.rel != "" && missing[parentRel(dir.rel)] {
-			missing[dir.rel] = true
-			continue
-		}
-		remoteDir := t.remotePathOf(dir.rel)
-		children, err := client.ReadDir(remoteDir)
-		if errors.Is(err, fs.ErrNotExist) {
-			missing[dir.rel] = true
-			continue
-		}
-		if err != nil {
-			return atPath(remoteDir, err)
-		}
-		for _, child := range children {
-			existing[joinRel(dir.rel, child.Name())] = true
-		}
-	}
-	for _, file := range t.plan.files {
-		if existing[file.rel] {
-			return destinationTaken(t.remotePathOf(file.rel))
-		}
-	}
-	return nil
-}
-
-func (t *transfer) checkLocalDestination() error {
-	info, err := os.Lstat(t.localRoot)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return atPath(t.localRoot, err)
-	}
-	if t.plan.folder != info.IsDir() || (!t.plan.folder && !t.overwrite) {
-		return destinationTaken(t.localRoot)
-	}
-	if !t.plan.folder || t.overwrite {
-		return nil
-	}
-	for _, file := range t.plan.files {
-		local := t.localPathOf(file.rel)
-		if _, err := os.Lstat(local); err == nil {
-			return destinationTaken(local)
-		}
-	}
-	return nil
 }
 
 func (t *transfer) makeDir(rel string) error {
@@ -544,11 +635,18 @@ func (t *transfer) uploadFile(file plannedEntry) error {
 		return atPath(local, err)
 	}
 	defer source.Close()
-	target, err := client.OpenFile(part, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
+	target, err := client.OpenFile(part, partOpenFlags(file))
 	if err != nil {
 		return atPath(part, err)
 	}
-	_, err = target.ReadFromWithConcurrency(&progressReader{transfer: t, source: source}, maxRequestsPerFile)
+	if file.resumeFrom > 0 {
+		if _, err = source.Seek(file.resumeFrom, io.SeekStart); err == nil {
+			_, err = target.Seek(file.resumeFrom, io.SeekStart)
+		}
+	}
+	if err == nil {
+		_, err = target.ReadFromWithConcurrency(&progressReader{transfer: t, source: source}, maxRequestsPerFile)
+	}
 	if closeErr := target.Close(); err == nil {
 		err = closeErr
 	}
@@ -559,10 +657,23 @@ func (t *transfer) uploadFile(file plannedEntry) error {
 		err = t.placeRemote(part, remote)
 	}
 	if err != nil {
-		client.Remove(part)
+		if !t.keepsPartAfter(err) {
+			client.Remove(part)
+		}
 		return atPath(remote, err)
 	}
 	return nil
+}
+
+func partOpenFlags(file plannedEntry) int {
+	if file.resumeFrom > 0 {
+		return os.O_WRONLY | os.O_CREATE
+	}
+	return os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+}
+
+func (t *transfer) keepsPartAfter(err error) bool {
+	return t.outcome(err).Code == codeConnection
 }
 
 func (t *transfer) placeRemote(part, remote string) error {
@@ -595,11 +706,22 @@ func (t *transfer) downloadFile(file plannedEntry) error {
 		return atPath(remote, err)
 	}
 	defer source.Close()
-	target, err := os.OpenFile(part, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	target, err := os.OpenFile(part, partOpenFlags(file), 0o644)
 	if err != nil {
 		return atPath(part, err)
 	}
-	_, err = source.WriteTo(&progressWriter{transfer: t, target: target})
+	if file.resumeFrom > 0 {
+		err = target.Truncate(file.resumeFrom)
+		if err == nil {
+			_, err = target.Seek(file.resumeFrom, io.SeekStart)
+		}
+		if err == nil {
+			_, err = source.Seek(file.resumeFrom, io.SeekStart)
+		}
+	}
+	if err == nil {
+		_, err = source.WriteTo(&progressWriter{transfer: t, target: target})
+	}
 	if closeErr := target.Close(); err == nil {
 		err = closeErr
 	}
@@ -610,7 +732,9 @@ func (t *transfer) downloadFile(file plannedEntry) error {
 		err = t.placeLocal(part, local)
 	}
 	if err != nil {
-		os.Remove(part)
+		if !t.keepsPartAfter(err) {
+			os.Remove(part)
+		}
 		return atPath(local, err)
 	}
 	return nil

@@ -41,6 +41,13 @@ Claude düyməsinin işləməsi üçün Claude Code kompüterdə quraşdırılm�
 - Solda bu kompüter, sağda server görünür. Faylı və ya qovluğu o biri tərəfə sürükləmək, Explorer-dən atmaq, "Yüklə" və "Endir" düymələri, iki dəfə klik ilə köçürmək olar.
 - Köçürmə növbəsində sürət və qalan vaxt görünür, köçürməni ləğv etmək olur. Fayl tam köçməyincə öz adını almır, ona görə yarımçıq fayl qalmır.
 - Serverdə yeni qovluq yaratmaq (+), ad dəyişmək (F2), silmək (Del, təsdiqlə) və icazələri dəyişmək olur.
+- **Redaktorda aç** (sağ klik): fayl kompüterə endirilir və VS Code-da açılır, VS Code yoxdursa Notepad-da. Hər dəfə saxlayanda fayl serverə özü yüklənir. Fayl heç vaxt işə salınmır, yalnız redaktorda açılır.
+- Bağlantı qopsa, köçürmənin yanında **Davam et** düyməsi çıxır. Köçürmə qaldığı yerdən davam edir, başdan başlamır.
+- **Terminalın qovluğunu izlə** (zəncir düyməsi): terminalda `cd` edəndə SFTP də həmin qovluğa keçir. Bunun üçün serverdəki shell qovluğu bildirməlidir. bash üçün `~/.bashrc`-yə bu sətri əlavə edin:
+
+  ```
+  PROMPT_COMMAND='printf "\033]7;file://%s%s\033\\" "$HOSTNAME" "$PWD"'
+  ```
 
 SSH işini ayrıca kiçik proqram, `agentgrid-ssh.exe` görür. O, Go dilində yazılıb (`native/ssh-helper`) və yalnız ilk qoşulmada işə düşür.
 

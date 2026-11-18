@@ -21,6 +21,8 @@ import {
 } from '../shared/hosts'
 import { LoadedSettingsSchema } from '../shared/settings'
 import {
+  EditPathResultSchema,
+  LocalChangedEventSchema,
   LocalListResultSchema,
   LocalPickResultSchema,
   LocalPlacesSchema,
@@ -128,7 +130,14 @@ const api: AgentGridApi = {
     reveal: async (path) => {
       await ipcRenderer.invoke(IpcChannel.localReveal, { path })
     },
-    pathForFile: (file) => webUtils.getPathForFile(file)
+    pathForFile: (file) => webUtils.getPathForFile(file),
+    editPath: async (name) =>
+      EditPathResultSchema.parse(await ipcRenderer.invoke(IpcChannel.localEditPath, { name })).path,
+    openInEditor: async (path) => Boolean(await ipcRenderer.invoke(IpcChannel.localOpenInEditor, { path })),
+    watch: (path) => ipcRenderer.send(IpcChannel.localWatch, { path }),
+    unwatch: (path) => ipcRenderer.send(IpcChannel.localUnwatch, { path }),
+    onChanged: (listener) =>
+      subscribe(IpcChannel.localChanged, (payload) => LocalChangedEventSchema.parse(payload), listener)
   }
 }
 

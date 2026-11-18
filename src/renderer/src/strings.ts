@@ -589,6 +589,22 @@ export const strings = {
     selection: (count: number) => `${count} seçilib`,
     items: (count: number) => `${count} element`,
     connecting: 'SFTP qoşulur…',
+    editInEditor: 'Redaktorda aç',
+    editing: {
+      label: 'Redaktə olunan fayllar',
+      downloading: 'açılır…',
+      watching: 'saxlayanda serverə yüklənəcək',
+      uploading: 'serverə yüklənir…',
+      saved: (name: string) => `${name} serverə yükləndi`,
+      failed: (name: string, message: string) => `${name} serverə yüklənmədi: ${message}`,
+      openFailed: (name: string) => `${name} redaktorda açıla bilmədi`,
+      stop: (name: string) => `${name} izləməsini dayandır`
+    },
+    resume: 'Davam et',
+    resumeLabel: (name: string) => `${name} köçürməsini davam etdir`,
+    follow: 'Terminalın qovluğunu izlə',
+    followUnavailable:
+      'Terminal olduğu qovluğu bildirmir. Bunun üçün serverdə shell qovluğu OSC 7 ilə göndərməlidir (README-də bir sətirlik nümunə var).',
     savedTitle: 'SFTP paneli',
     savedText: (name: string) => `${name} · SFTP. Bağlantı yoxdur.`,
     closedBar: 'SFTP bağlantısı bağlandı',

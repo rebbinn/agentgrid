@@ -446,3 +446,24 @@ describe('SFTP sessions', () => {
     ])
   })
 })
+
+describe('resuming SFTP transfers', () => {
+  it('passes resume to the helper only when asked', async () => {
+    const SFTP = '77777777-7777-4777-8777-777777777777'
+    const opened = service.openSftp({ id: SFTP, hostId: TARGET })
+    await settle()
+    helper.emit({ ev: 'sftp-ready', sid: SFTP, home: '/home/deploy' })
+    await opened
+    const base = {
+      sessionId: SFTP,
+      direction: 'upload' as const,
+      localPath: 'C:\\big.iso',
+      remotePath: '/tmp/big.iso',
+      overwrite: false
+    }
+    service.transfer({ ...base, transferId: '88888888-8888-4888-8888-888888888888', resume: true })
+    expect(helper.last('sftp-upload')).toMatchObject({ resume: true })
+    service.transfer({ ...base, transferId: '99999999-9999-4999-8999-999999999999' })
+    expect(helper.last('sftp-upload')).not.toHaveProperty('resume')
+  })
+})
