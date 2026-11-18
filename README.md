@@ -31,7 +31,8 @@ Claude düyməsinin işləməsi üçün Claude Code kompüterdə quraşdırılm�
 - Giriş üsulları: parol, SSH açarı (parollu açar da), Windows ssh-agent, iki addımlı kod. Jump host (bastion) üzərindən də qoşulmaq olur.
 - Parollar Windows-un öz şifrələməsi ilə `%APPDATA%\AgentGrid\secrets.json` faylında saxlanır. Server siyahısı (`hosts.json`) parolsuzdur.
 - İlk qoşulmada serverin barmaq izi soruşulur. İz sonradan dəyişsə, proqram qoşulmur və xəbərdarlıq edir.
-- Prod serverin terminalının çərçivəsi qırmızıdır və qoşulmazdan əvvəl təsdiq soruşulur. "Hamısını başlat" prod serverlərə heç vaxt qoşulmur.
+- Server panelinin çərçivəsi mühitə görə rənglənir: prod qırmızı, preprod sarı, dev mavi. Belə panel adi terminaldan və Claude-dan dərhal seçilir.
+- Prod serverə qoşulmazdan əvvəl təsdiq soruşulur. "Hamısını başlat" prod serverlərə heç vaxt qoşulmur.
 - Siyahını komanda yoldaşları ilə paylaşmaq olar: Serverlər tabında "⋯" düyməsinə basıb "İxrac et" seçirsiniz, alınan faylı onlar "İdxal et" ilə götürürlər. Parollar fayla düşmür.
 
 ### SFTP
@@ -41,6 +42,8 @@ Claude düyməsinin işləməsi üçün Claude Code kompüterdə quraşdırılm�
 - Solda bu kompüter, sağda server görünür. Faylı və ya qovluğu o biri tərəfə sürükləmək, Explorer-dən atmaq, "Yüklə" və "Endir" düymələri, iki dəfə klik ilə köçürmək olar.
 - Köçürmə növbəsində sürət və qalan vaxt görünür, köçürməni ləğv etmək olur. Fayl tam köçməyincə öz adını almır, ona görə yarımçıq fayl qalmır.
 - Serverdə yeni qovluq yaratmaq (+), ad dəyişmək (F2), silmək (Del, təsdiqlə) və icazələri dəyişmək olur.
+- Klaviatura: SFTP paneli açılanda ↓ basın, "Bu kompüter" siyahısına düşürsünüz. Fayllar arasında ↑ ↓ ilə keçilir, Enter qovluğa girir, Backspace bir qovluq yuxarı çıxır. Ünvan sətrində ↓ basanda da siyahıya keçirsiniz.
+- Siyahıda hərf yazanda həmin hərflərlə başlayan fayl seçilir (yalnız açıq qovluqda): `c` → C, `ca` → CA, `cab` → CAB. Bir saniyə yazmasanız axtarış sıfırlanır. Eyni hərfi təkrar basanda həmin hərflə başlayan fayllar arasında növbə ilə keçir.
 - **Redaktorda aç** (sağ klik): fayl kompüterə endirilir və VS Code-da açılır, VS Code yoxdursa Notepad-da. Hər dəfə saxlayanda fayl serverə özü yüklənir. Fayl heç vaxt işə salınmır, yalnız redaktorda açılır.
 - Bağlantı qopsa, köçürmənin yanında **Davam et** düyməsi çıxır. Köçürmə qaldığı yerdən davam edir, başdan başlamır.
 - **Terminalın qovluğunu izlə** (zəncir düyməsi): terminalda `cd` edəndə SFTP də həmin qovluğa keçir. Bunun üçün serverdəki shell qovluğu bildirməlidir. bash üçün `~/.bashrc`-yə bu sətri əlavə edin:

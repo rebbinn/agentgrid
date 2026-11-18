@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Host } from '@shared/hosts'
 import { isValidFileName, joinLocal, joinRemote } from '@shared/sftp'
@@ -27,7 +27,7 @@ import { ContextMenu } from './ContextMenu'
 import type { DropdownItem } from './Dropdown'
 import { Icon } from './Icon'
 import { PromptDialog } from './PromptDialog'
-import { SftpFileList, type DraggedEntries } from './SftpFileList'
+import { SftpFileList, enterFileList, type DraggedEntries } from './SftpFileList'
 
 const texts = strings.sftp
 const MAX_LISTED_NAMES = 3
@@ -162,8 +162,32 @@ function TransferQueue({ paneId }: { paneId: string }) {
   )
 }
 
-export function SftpView({ paneId, host }: { paneId: string; host: Host | undefined }) {
+function isTypingSomewhere(element: Element | null): boolean {
+  if (!(element instanceof HTMLElement) || element.closest('.xterm')) return false
+  return (
+    element.matches('input, textarea, select, [contenteditable="true"]') ||
+    element.closest('[role="dialog"], [role="alertdialog"]') !== null
+  )
+}
+
+interface SftpViewProps {
+  paneId: string
+  host: Host | undefined
+  active: boolean
+}
+
+export function SftpView({ paneId, host, active }: SftpViewProps) {
+  const rootRef = useRef<HTMLDivElement>(null)
   const listings = useSftpStore((state) => state.listings[paneId])
+  const hasListings = listings !== undefined
+
+  useEffect(() => {
+    const root = rootRef.current
+    const focused = document.activeElement
+    if (!active || !root || (focused && root.contains(focused)) || isTypingSomewhere(focused)) return
+    root.focus({ preventScroll: true })
+  }, [active, hasListings])
+
   const pushToast = useUiStore((state) => state.pushToast)
   const [dialog, setDialog] = useState<SftpDialog | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
@@ -266,8 +290,23 @@ export function SftpView({ paneId, host }: { paneId: string; host: Host | undefi
 
   const remoteName = host?.name ?? texts.remote
 
+  const enterLists = (): void => {
+    const root = rootRef.current
+    const listOf = (side: Side): Element | null | undefined => root?.querySelector(`[role="listbox"][data-side="${side}"]`)
+    if (!enterFileList(listOf('local'), paneId, 'local')) enterFileList(listOf('remote'), paneId, 'remote')
+  }
+
   return (
-    <div className="sftp">
+    <div
+      ref={rootRef}
+      className="sftp"
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return
+        event.preventDefault()
+        enterLists()
+      }}
+    >
       <div className="sftp__columns">
         <SftpFileList
           paneId={paneId}

@@ -81,7 +81,10 @@ function TerminalPaneComponent({
       if (renamingRef.current) return
       const focused = document.activeElement
       const someoneElseHasFocus = focused !== null && focused !== document.body && !section.contains(focused)
-      if (!someoneElseHasFocus) terminalRegistry.get(pane.id)?.focus()
+      if (someoneElseHasFocus) return
+      const managed = terminalRegistry.get(pane.id)
+      if (managed) managed.focus()
+      else if (focused === null || focused === document.body) section.querySelector<HTMLElement>('.sftp')?.focus()
     }, 0)
   }
   const restart = (): void => void store().restart(pane.id)
@@ -311,7 +314,7 @@ function TerminalPaneComponent({
 
       <div className="pane__body">
         {isSftp ? (
-          pane.status === 'running' && <SftpView paneId={pane.id} host={host} />
+          pane.status === 'running' && <SftpView paneId={pane.id} host={host} active={active} />
         ) : (
           <TerminalView id={pane.id} active={active && !renaming} />
         )}

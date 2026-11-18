@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../../src/renderer/src/App'
 import { resetAppInfoCache } from '../../src/renderer/src/lib/app-info'
 import { resetShellsCache } from '../../src/renderer/src/lib/shells'
@@ -180,6 +180,66 @@ describe('the SFTP pane', () => {
         recursive: true
       })
     )
+  })
+
+  it('jumps to the file whose name starts with the letters typed in the list', async () => {
+    localEntries = ['A', 'B', 'C', 'CA', 'CB', 'CAB'].map((name) => ({ name, kind: 'file', size: 1, mtime: 1 }))
+    const { local } = await openSftp()
+    await within(local).findByText('CAB')
+    const start = option(local, 'A')
+    fireEvent.mouseDown(start)
+    start.focus()
+    const footer = local.closest('section')!.querySelector('.sftp-list__footer')!
+    const type = (key: string): void => {
+      fireEvent.keyDown(document.activeElement!, { key })
+    }
+    const selected = (): string[] => useSftpStore.getState().listings[useTerminalStore.getState().panes[0]!.id]!.local.selected
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      type('c')
+      expect(selected()).toEqual(['C'])
+      expect(document.activeElement).toBe(option(local, 'C'))
+      type('A')
+      expect(selected()).toEqual(['CA'])
+      type('b')
+      expect(selected()).toEqual(['CAB'])
+      expect(document.activeElement).toBe(option(local, 'CAB'))
+      expect(footer.textContent).toBe('Axtarış: cAb')
+
+      type('x')
+      expect(selected()).toEqual(['CAB'])
+      expect(footer.textContent).toBe('«cAbx» ilə başlayan fayl yoxdur')
+
+      act(() => vi.advanceTimersByTime(1000))
+      expect(footer.textContent).toBe('1 seçilib')
+      type('b')
+      expect(selected()).toEqual(['B'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('goes into the computer list with the down arrow and then from file to file', async () => {
+    localEntries = ['a.txt', 'b.txt'].map((name) => ({ name, kind: 'file', size: 1, mtime: 1 }))
+    const { local } = await openSftp()
+    await within(local).findByText('b.txt')
+    const root = local.closest<HTMLElement>('.sftp')!
+    const selected = (): string[] => useSftpStore.getState().listings[useTerminalStore.getState().panes[0]!.id]!.local.selected
+    await waitFor(() => expect(document.activeElement).toBe(root))
+
+    fireEvent.keyDown(root, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(option(local, 'a.txt'))
+    expect(selected()).toEqual(['a.txt'])
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(option(local, 'b.txt'))
+    expect(selected()).toEqual(['b.txt'])
+
+    const path = screen.getByLabelText('Bu kompüter: qovluq yolu')
+    path.focus()
+    fireEvent.keyDown(path, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(option(local, 'b.txt'))
+    expect(selected()).toEqual(['b.txt'])
   })
 
   it('opens terminal and SFTP side by side with a single login', async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { formatMode, localParent, remoteParent } from '@shared/sftp'
 import { formatBytes, formatDateTime } from '../lib/format'
+import { TYPEAHEAD_RESET_MS, typeaheadMatch } from '../lib/typeahead'
 import { navigate, selectEntry, sftpErrorText } from '../state/sftp-actions'
 import { isDirectoryLike, useSftpStore, visibleEntries, type FileEntry, type Listing, type Side } from '../state/sftp-store'
 import { strings } from '../strings'
@@ -29,6 +30,16 @@ interface SftpFileListProps {
 
 const texts = strings.sftp
 
+export function enterFileList(list: Element | null | undefined, paneId: string, side: Side): boolean {
+  const row = list?.querySelector<HTMLElement>('[role="option"][tabindex="0"]')
+  if (!row) return false
+  row.focus()
+  const name = row.dataset['name']
+  const selected = useSftpStore.getState().listings[paneId]?.[side].selected ?? []
+  if (name && selected.length === 0) selectEntry(paneId, side, name, 'single', [])
+  return true
+}
+
 function entryIcon(entry: FileEntry): 'folder' | 'file' | 'link' {
   if (isDirectoryLike(entry)) return 'folder'
   return entry.kind === 'link' ? 'link' : 'file'
@@ -51,8 +62,19 @@ export function SftpFileList({
   const [pathDraft, setPathDraft] = useState(listing.path)
   const [dropActive, setDropActive] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
+  const typedRef = useRef('')
+  const typedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [typed, setTyped] = useState('')
+
+  const clearTyped = (): void => {
+    if (typedTimer.current) clearTimeout(typedTimer.current)
+    typedTimer.current = null
+    typedRef.current = ''
+    setTyped('')
+  }
 
   useEffect(() => setPathDraft(listing.path), [listing.path])
+  useEffect(() => clearTyped, [listing.path])
 
   const parent = side === 'remote' ? remoteParent(listing.path) : localParent(listing.path)
   const canGoUp = side === 'remote' ? listing.path !== '/' : parent !== null
@@ -76,6 +98,19 @@ export function SftpFileList({
     if (name) selectEntry(paneId, side, name, 'single', order)
   }
 
+  const typeAhead = (event: KeyboardEvent<HTMLDivElement>): boolean => {
+    if (event.ctrlKey || event.altKey || event.metaKey || [...event.key].length !== 1) return false
+    if (event.key === ' ' && typedRef.current === '') return false
+    const query = typedRef.current + event.key
+    typedRef.current = query
+    setTyped(query)
+    if (typedTimer.current) clearTimeout(typedTimer.current)
+    typedTimer.current = setTimeout(clearTyped, TYPEAHEAD_RESET_MS)
+    const index = typeaheadMatch(order, query)
+    if (index !== -1) focusRow(index)
+    return true
+  }
+
   const handleRowKey = (event: KeyboardEvent<HTMLDivElement>, entry: FileEntry, index: number): void => {
     if (event.key === 'Enter') {
       event.preventDefault()
@@ -96,6 +131,8 @@ export function SftpFileList({
       event.preventDefault()
       const rect = event.currentTarget.getBoundingClientRect()
       onContextMenu({ x: rect.left + 24, y: rect.bottom }, entry)
+    } else if (typeAhead(event)) {
+      event.preventDefault()
     }
   }
 
@@ -155,6 +192,10 @@ export function SftpFileList({
             value={pathDraft}
             spellCheck={false}
             onChange={(event) => setPathDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'ArrowDown') return
+              if (enterFileList(listRef.current, paneId, side)) event.preventDefault()
+            }}
           />
         </form>
         <button
@@ -261,8 +302,12 @@ export function SftpFileList({
         })}
       </div>
 
-      <p className="sftp-list__footer">
-        {selectedCount > 0 ? texts.selection(selectedCount) : texts.items(entries.length)}
+      <p className="sftp-list__footer" data-typing={typed !== ''}>
+        {typed !== ''
+          ? texts.typeahead(typed, typeaheadMatch(order, typed) !== -1)
+          : selectedCount > 0
+            ? texts.selection(selectedCount)
+            : texts.items(entries.length)}
       </p>
     </section>
   )

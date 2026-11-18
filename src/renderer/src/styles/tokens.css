@@ -23,6 +23,9 @@
   --warn: #e3b341;
   --err: #f85149;
   --err-soft: rgba(248, 81, 73, 0.14);
+  --warn-soft: rgba(227, 179, 65, 0.14);
+  --info: #58a6ff;
+  --info-soft: rgba(88, 166, 255, 0.14);
 
   --agent-claude: #d97757;
 

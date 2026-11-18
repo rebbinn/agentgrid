@@ -588,6 +588,7 @@ export const strings = {
     dropHint: 'Faylları Explorer-dən bura atın və ya o biri tərəfdən sürükləyin.',
     selection: (count: number) => `${count} seçilib`,
     items: (count: number) => `${count} element`,
+    typeahead: (query: string, found: boolean) => (found ? `Axtarış: ${query}` : `«${query}» ilə başlayan fayl yoxdur`),
     connecting: 'SFTP qoşulur…',
     editInEditor: 'Redaktorda aç',
     editing: {

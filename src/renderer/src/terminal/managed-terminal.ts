@@ -40,6 +40,10 @@ export function cwdFromOsc7(data: string): string | null {
   }
 }
 
+function openLink(uri: string): void {
+  void window.agentgrid.external.open(uri)
+}
+
 export class ManagedTerminal {
   readonly term: Terminal
   spawnRequested = false
@@ -65,15 +69,12 @@ export class ManagedTerminal {
       scrollback: SCROLLBACK_LINES,
       allowProposedApi: true,
       theme: terminalTheme,
+      linkHandler: { activate: (_event, uri) => openLink(uri) },
       windowsPty: windowsBuild > 0 ? { backend: 'conpty', buildNumber: windowsBuild } : undefined
     })
 
     this.term.loadAddon(this.fitAddon)
-    this.term.loadAddon(
-      new WebLinksAddon((_event, uri) => {
-        void window.agentgrid.external.open(uri)
-      })
-    )
+    this.term.loadAddon(new WebLinksAddon((_event, uri) => openLink(uri)))
     this.term.loadAddon(new Unicode11Addon())
     this.term.unicode.activeVersion = '11'
 
