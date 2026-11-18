@@ -49,7 +49,23 @@ export function createAgentGridMock() {
       readText: vi.fn().mockResolvedValue(''),
       writeText: vi.fn().mockResolvedValue(undefined)
     },
-    external: { open: vi.fn().mockResolvedValue(true) }
+    external: { open: vi.fn().mockResolvedValue(true) },
+    hosts: {
+      list: vi.fn<AgentGridApi['hosts']['list']>().mockResolvedValue([]),
+      save: vi.fn<AgentGridApi['hosts']['save']>(),
+      remove: vi.fn<AgentGridApi['hosts']['remove']>().mockResolvedValue(undefined),
+      exportAll: vi.fn<AgentGridApi['hosts']['exportAll']>().mockResolvedValue({ status: 'cancelled' }),
+      importFile: vi.fn<AgentGridApi['hosts']['importFile']>().mockResolvedValue({ status: 'cancelled' }),
+      pickKey: vi.fn<AgentGridApi['hosts']['pickKey']>().mockResolvedValue({ path: null }),
+      forgetHostKey: vi.fn<AgentGridApi['hosts']['forgetHostKey']>().mockResolvedValue(false)
+    },
+    ssh: {
+      open: vi.fn<AgentGridApi['ssh']['open']>().mockResolvedValue({ ok: true }),
+      test: vi.fn<AgentGridApi['ssh']['test']>().mockResolvedValue({ ok: true }),
+      answer: vi.fn<AgentGridApi['ssh']['answer']>(),
+      cancel: vi.fn<AgentGridApi['ssh']['cancel']>(),
+      onEvent: vi.fn<AgentGridApi['ssh']['onEvent']>(() => () => undefined)
+    }
   } satisfies AgentGridApi
 }
 

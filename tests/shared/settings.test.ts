@@ -170,6 +170,7 @@ describe('presets and the newer preferences', () => {
       sidebarOpen: false,
       sidebarTab: 'sessions',
       sessionsTabOpen: true,
+      serversTabOpen: false,
       sessionsShowAll: true,
       defaultFontSize: 13,
       defaultShellId: null

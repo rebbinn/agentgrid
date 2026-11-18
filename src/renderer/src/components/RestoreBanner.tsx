@@ -1,10 +1,12 @@
-import { useTerminalStore } from '../state/terminal-store'
+import { useHostsStore } from '../state/hosts-store'
+import { startsInBulk, useTerminalStore } from '../state/terminal-store'
 import { useWorkspaceStore } from '../state/workspace-store'
 import { strings } from '../strings'
 import { Icon } from './Icon'
 
 export function RestoreBanner() {
-  const idleCount = useTerminalStore((state) => state.panes.filter((pane) => pane.status === 'idle').length)
+  const hosts = useHostsStore((state) => state.views)
+  const idleCount = useTerminalStore((state) => state.panes.filter((pane) => startsInBulk(pane, hosts)).length)
   const activeId = useWorkspaceStore((state) => state.activeId)
   const autoStart = useWorkspaceStore(
     (state) => state.workspaces.find((item) => item.id === state.activeId)?.autoStart ?? false

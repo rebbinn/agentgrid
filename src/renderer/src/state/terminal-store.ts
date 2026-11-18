@@ -1,13 +1,17 @@
 import { create } from 'zustand'
 import { findAgent, type AgentId } from '@shared/agents'
-import type { ShellInfo, TerminalErrorCode, TerminalExitEvent } from '@shared/ipc'
+import type { ExitReason, ShellInfo, TerminalErrorCode, TerminalExitEvent } from '@shared/ipc'
 import type { PresetKind, SavedPane } from '@shared/settings'
+import { SSH_PANE_CWD, SSH_SHELL_ID, SSH_SHELL_LABEL, type SshFailure, type SshResult } from '@shared/ssh'
 import { getAppInfo } from '../lib/app-info'
 import { clampFontSize } from '../lib/font-size'
 import { getShells, pickDefaultShell } from '../lib/shells'
 import { strings } from '../strings'
 import { terminalRegistry } from '../terminal/registry'
+import type { HostView } from '@shared/hosts'
+import { findHostView, useHostsStore } from './hosts-store'
 import { useLayoutStore } from './layout-store'
+import { useSshStore } from './ssh-store'
 import { usePrefsStore } from './prefs-store'
 import { useUiStore } from './ui-store'
 
@@ -29,8 +33,11 @@ export interface Pane {
   resumeSessionId?: string
   startupCommand?: string
   commandKind?: PresetKind
+  sshHostId?: string
+  sshFailure?: SshFailure
   status: PaneStatus
   exitCode?: number
+  exitReason?: ExitReason
   errorCode?: TerminalErrorCode
   errorDetail?: string
 }
@@ -50,6 +57,13 @@ export interface ParkedPanes {
   activePaneId: string | null
 }
 
+export function startsInBulk(pane: Pane, hosts: readonly HostView[] = useHostsStore.getState().views): boolean {
+  if (pane.status !== 'idle') return false
+  if (!pane.sshHostId) return true
+  const environment = hosts.find((view) => view.host.id === pane.sshHostId)?.host.environment
+  return environment !== undefined && environment !== 'prod'
+}
+
 export function countRunning(panes: readonly Pane[]): number {
   return panes.filter((pane) => pane.status === 'running' || pane.status === 'starting').length
 }
@@ -62,6 +76,7 @@ interface TerminalState {
   takeParked: (workspaceId: string) => boolean
   discardParked: (workspaceId: string) => void
   launch: (options: LaunchOptions) => Promise<string | null>
+  launchSsh: (hostId: string) => string | null
   spawnPane: (id: string, cols: number, rows: number) => Promise<void>
   restart: (id: string) => Promise<void>
   startPane: (id: string) => Promise<void>
@@ -94,7 +109,8 @@ export function capturePanes(): { panes: SavedPane[]; activePane: number | null 
       ...(pane.agentId ? { agentId: pane.agentId } : {}),
       ...(pane.resumeSessionId ? { resumeSessionId: pane.resumeSessionId } : {}),
       ...(pane.startupCommand ? { startupCommand: pane.startupCommand } : {}),
-      ...(pane.commandKind ? { commandKind: pane.commandKind } : {})
+      ...(pane.commandKind ? { commandKind: pane.commandKind } : {}),
+      ...(pane.sshHostId ? { sshHostId: pane.sshHostId } : {})
     })),
     activePane: activeIndex === -1 ? null : activeIndex
   }
@@ -236,11 +252,77 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
       return id
     },
 
+    launchSsh: (hostId) => {
+      const view = findHostView(hostId)
+      if (!view) {
+        useUiStore.getState().pushToast('error', strings.ssh.hostGone)
+        return null
+      }
+      const id = crypto.randomUUID()
+      const managed = terminalRegistry.create(id, 0)
+      managed.onZoom = (step) => {
+        if (step === 'reset') get().resetFontSize(id)
+        else get().adjustFontSize(id, step)
+      }
+      const title = nextPaneTitle(
+        shortenTitle(view.host.name),
+        get().panes.map((pane) => pane.title)
+      )
+      set((state) => ({
+        panes: [
+          ...state.panes,
+          {
+            id,
+            seq: nextSeq++,
+            fontSize: usePrefsStore.getState().defaultFontSize,
+            title,
+            shellId: SSH_SHELL_ID,
+            shellLabel: SSH_SHELL_LABEL,
+            cwd: SSH_PANE_CWD,
+            sshHostId: hostId,
+            status: view.host.environment === 'prod' ? 'idle' : 'starting'
+          }
+        ],
+        activePaneId: id
+      }))
+      return id
+    },
+
     spawnPane: async (id, cols, rows) => {
       const pane = findPane(id)
       const managed = terminalRegistry.get(id)
       if (!pane || !managed) return
-      updatePane(id, { status: 'starting', errorCode: undefined, errorDetail: undefined })
+      updatePane(id, {
+        status: 'starting',
+        errorCode: undefined,
+        errorDetail: undefined,
+        sshFailure: undefined,
+        exitReason: undefined
+      })
+
+      if (pane.sshHostId) {
+        const result: SshResult = await window.agentgrid.ssh
+          .open({ id, hostId: pane.sshHostId, cols, rows })
+          .catch((error: unknown) => ({
+            ok: false as const,
+            failure: { code: 'other' as const, message: error instanceof Error ? error.message : String(error) }
+          }))
+        useSshStore.getState().resolveRequest(id)
+        const current = findPane(id)
+        if (!current) {
+          if (result.ok) window.agentgrid.terminal.kill(id)
+          return
+        }
+        if (current.status !== 'starting') return
+        if (result.ok) {
+          managed.markSpawned({ cols, rows })
+          managed.fit()
+          updatePane(id, { status: 'running' })
+        } else {
+          updatePane(id, { status: 'error', sshFailure: result.failure })
+        }
+        return
+      }
 
       const result = await window.agentgrid.terminal
         .create({
@@ -308,7 +390,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
     },
 
     startAllIdle: async () => {
-      const idle = get().panes.filter((pane) => pane.status === 'idle')
+      const idle = get().panes.filter((pane) => startsInBulk(pane))
       await Promise.all(idle.map((pane) => get().startPane(pane.id)))
     },
 
@@ -321,7 +403,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
       }
       const restored: Pane[] = saved.map((entry) => {
         const id = crypto.randomUUID()
-        const managed = terminalRegistry.create(id, windowsBuild)
+        const managed = terminalRegistry.create(id, entry.sshHostId ? 0 : windowsBuild)
         managed.onZoom = (step) => {
           if (step === 'reset') get().resetFontSize(id)
           else get().adjustFontSize(id, step)
@@ -338,6 +420,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
           resumeSessionId: entry.resumeSessionId,
           startupCommand: entry.startupCommand,
           commandKind: entry.commandKind,
+          sshHostId: entry.sshHostId,
           status: 'idle'
         }
       })
@@ -360,6 +443,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
       if (index === -1) return
       window.agentgrid.terminal.kill(id)
       terminalRegistry.remove(id)
+      useSshStore.getState().forget(id)
       const remaining = panes.filter((pane) => pane.id !== id)
       const nextActive =
         activePaneId === id ? (remaining[Math.min(index, remaining.length - 1)]?.id ?? null) : activePaneId
@@ -377,7 +461,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
 
     handleExit: (event) => {
       if (!findPane(event.id)) return
-      updatePane(event.id, { status: 'exited', exitCode: event.exitCode })
+      updatePane(event.id, { status: 'exited', exitCode: event.exitCode, exitReason: event.reason })
     },
 
     renamePane: (id, title) => {

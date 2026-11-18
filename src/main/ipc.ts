@@ -26,13 +26,32 @@ import {
   type ShellInfo,
   type TerminalCreateResult
 } from '@shared/ipc'
+import {
+  HostIdSchema,
+  HostSaveRequestSchema,
+  type HostSaveResult,
+  type HostView,
+  type HostsTransferResult,
+  type KeyPickResult
+} from '@shared/hosts'
 import { AppStateSchema, type AppState, type LoadedSettings } from '@shared/settings'
+import {
+  SshAnswerSchema,
+  SshCancelSchema,
+  SshOpenRequestSchema,
+  SshTestRequestSchema,
+  type SshResult
+} from '@shared/ssh'
+import type { HostsService } from './hosts-service'
 import { isOpenableExternalUrl, isTrustedSender, type TrustedEntry } from './security'
 import type { ShellDefinition } from './shells'
+import type { SshService } from './ssh-service'
 import type { TerminalService } from './terminal-service'
 
 export interface IpcServices {
   terminals: TerminalService
+  hosts: HostsService
+  ssh: SshService
   getShells(): Promise<ShellDefinition[]>
   listSessions(): Promise<ClaudeSession[]>
   agentStatus(): AgentStatus
@@ -120,7 +139,8 @@ export function registerIpc(
   ipcMain.on(IpcChannel.terminalKill, (event, payload: unknown) => {
     if (!isTrusted(event)) return
     const parsed = TerminalKillSchema.safeParse(payload)
-    if (parsed.success) services.terminals.kill(parsed.data.id)
+    if (!parsed.success) return
+    if (!services.terminals.kill(parsed.data.id)) services.ssh.cancel(parsed.data.id)
   })
 
   ipcMain.handle(IpcChannel.sessionsList, async (event): Promise<ClaudeSession[]> => {
@@ -163,6 +183,73 @@ export function registerIpc(
     const parsed = ClipboardWriteSchema.safeParse(payload)
     if (!parsed.success) throw new Error('Invalid clipboard payload')
     await clipboard.writeText(parsed.data.text)
+  })
+
+  ipcMain.handle(IpcChannel.hostsList, (event): HostView[] => {
+    guard(event)
+    return services.hosts.views()
+  })
+
+  ipcMain.handle(IpcChannel.hostsSave, async (event, payload: unknown): Promise<HostSaveResult> => {
+    guard(event)
+    const parsed = HostSaveRequestSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false, code: 'invalid' }
+    return services.hosts.save(parsed.data)
+  })
+
+  ipcMain.handle(IpcChannel.hostsDelete, async (event, payload: unknown): Promise<void> => {
+    guard(event)
+    const parsed = HostIdSchema.safeParse(payload)
+    if (!parsed.success) throw new Error('Invalid host id')
+    await services.hosts.remove(parsed.data.id)
+  })
+
+  ipcMain.handle(IpcChannel.hostsExport, async (event): Promise<HostsTransferResult> => {
+    guard(event)
+    return services.hosts.exportAll()
+  })
+
+  ipcMain.handle(IpcChannel.hostsImport, async (event): Promise<HostsTransferResult> => {
+    guard(event)
+    return services.hosts.importFile()
+  })
+
+  ipcMain.handle(IpcChannel.hostsPickKey, async (event): Promise<KeyPickResult> => {
+    guard(event)
+    return services.hosts.pickKey()
+  })
+
+  ipcMain.handle(IpcChannel.hostsForgetKey, async (event, payload: unknown): Promise<boolean> => {
+    guard(event)
+    const parsed = HostIdSchema.safeParse(payload)
+    if (!parsed.success) return false
+    return services.hosts.forgetHostKey(parsed.data.id)
+  })
+
+  ipcMain.handle(IpcChannel.sshOpen, async (event, payload: unknown): Promise<SshResult> => {
+    guard(event)
+    const parsed = SshOpenRequestSchema.safeParse(payload)
+    if (!parsed.success) throw new Error('Invalid SSH open request')
+    return services.ssh.open(parsed.data)
+  })
+
+  ipcMain.handle(IpcChannel.sshTest, async (event, payload: unknown): Promise<SshResult> => {
+    guard(event)
+    const parsed = SshTestRequestSchema.safeParse(payload)
+    if (!parsed.success) throw new Error('Invalid SSH test request')
+    return services.ssh.test(parsed.data)
+  })
+
+  ipcMain.on(IpcChannel.sshAnswer, (event, payload: unknown) => {
+    if (!isTrusted(event)) return
+    const parsed = SshAnswerSchema.safeParse(payload)
+    if (parsed.success) services.ssh.answer(parsed.data)
+  })
+
+  ipcMain.on(IpcChannel.sshCancel, (event, payload: unknown) => {
+    if (!isTrusted(event)) return
+    const parsed = SshCancelSchema.safeParse(payload)
+    if (parsed.success) services.ssh.cancel(parsed.data.sessionId)
   })
 
   ipcMain.handle(IpcChannel.externalOpen, async (event, payload: unknown): Promise<boolean> => {

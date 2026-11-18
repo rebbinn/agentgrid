@@ -13,6 +13,11 @@ files:
   - '!node_modules/node-pty/**/win10-arm64/**'
 electronLanguages:
   - en-US
+extraResources:
+  - from: resources/bin
+    to: bin
+    filter:
+      - agentgrid-ssh.exe
 asar: true
 asarUnpack:
   - node_modules/node-pty/**

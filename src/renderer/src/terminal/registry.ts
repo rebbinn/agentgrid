@@ -13,7 +13,7 @@ class TerminalRegistry {
     this.unsubscribers = [
       api.onData((event) => this.terminals.get(event.id)?.write(event.data)),
       api.onExit((event) => {
-        this.terminals.get(event.id)?.markExited(event.exitCode)
+        this.terminals.get(event.id)?.markExited(event.exitCode, event.reason)
         onExit(event)
       })
     ]

@@ -12,6 +12,8 @@ import { WorkspaceDialogs } from './components/WorkspaceDialogs'
 import { useGlobalShortcuts } from './hooks/use-global-shortcuts'
 import { useLaunchRequests } from './hooks/use-launch-requests'
 import { useCollapseSidebarWhenNarrow } from './hooks/use-narrow-window'
+import { useHostsStore } from './state/hosts-store'
+import { startSshEvents, stopSshEvents } from './state/ssh-store'
 import { useTerminalStore } from './state/terminal-store'
 import { terminalRegistry } from './terminal/registry'
 
@@ -22,7 +24,12 @@ export function App() {
 
   useEffect(() => {
     terminalRegistry.init(useTerminalStore.getState().handleExit)
-    return () => terminalRegistry.dispose()
+    startSshEvents()
+    void useHostsStore.getState().load()
+    return () => {
+      terminalRegistry.dispose()
+      stopSshEvents()
+    }
   }, [])
 
   return (

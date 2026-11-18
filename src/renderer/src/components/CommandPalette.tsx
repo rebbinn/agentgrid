@@ -7,6 +7,7 @@ import { getShells } from '../lib/shells'
 import { useAgentsStore } from '../state/agents-store'
 import { useLayoutStore } from '../state/layout-store'
 import { usePresetsStore } from '../state/presets-store'
+import { useHostsStore } from '../state/hosts-store'
 import { useSessionsStore } from '../state/sessions-store'
 import { useTerminalStore } from '../state/terminal-store'
 import { useUiStore } from '../state/ui-store'
@@ -29,6 +30,7 @@ function PaletteContent() {
   const presets = usePresetsStore((state) => state.presets)
   const agents = useAgentsStore((state) => state.status)
   const sessions = useSessionsStore((state) => state.sessions)
+  const hosts = useHostsStore((state) => state.views)
   const focusMode = useLayoutStore((state) => state.focusMode)
   const [shells, setShells] = useState<ShellInfo[]>([])
   const [query, setQuery] = useState('')
@@ -56,9 +58,10 @@ function PaletteContent() {
         presets,
         agents,
         sessions,
-        focusMode
+        focusMode,
+        hosts
       }),
-    [panes, activePaneId, workspaces, activeWorkspaceId, shells, presets, agents, sessions, focusMode]
+    [panes, activePaneId, workspaces, activeWorkspaceId, shells, presets, agents, sessions, focusMode, hosts]
   )
   const results = useMemo(() => searchCommands(commands, query), [commands, query])
   const current = results.length === 0 ? 0 : Math.min(selected, results.length - 1)

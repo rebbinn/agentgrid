@@ -13,7 +13,14 @@ import {
   TerminalExitEventSchema,
   type AgentGridApi
 } from '../shared/ipc'
+import {
+  HostSaveResultSchema,
+  HostViewListSchema,
+  HostsTransferResultSchema,
+  KeyPickResultSchema
+} from '../shared/hosts'
 import { LoadedSettingsSchema } from '../shared/settings'
+import { SshEventSchema, SshResultSchema } from '../shared/ssh'
 
 function subscribe<T>(
   channel: string,
@@ -78,6 +85,24 @@ const api: AgentGridApi = {
   },
   external: {
     open: async (url) => Boolean(await ipcRenderer.invoke(IpcChannel.externalOpen, { url }))
+  },
+  hosts: {
+    list: async () => HostViewListSchema.parse(await ipcRenderer.invoke(IpcChannel.hostsList)),
+    save: async (request) => HostSaveResultSchema.parse(await ipcRenderer.invoke(IpcChannel.hostsSave, request)),
+    remove: async (id) => {
+      await ipcRenderer.invoke(IpcChannel.hostsDelete, { id })
+    },
+    exportAll: async () => HostsTransferResultSchema.parse(await ipcRenderer.invoke(IpcChannel.hostsExport)),
+    importFile: async () => HostsTransferResultSchema.parse(await ipcRenderer.invoke(IpcChannel.hostsImport)),
+    pickKey: async () => KeyPickResultSchema.parse(await ipcRenderer.invoke(IpcChannel.hostsPickKey)),
+    forgetHostKey: async (id) => Boolean(await ipcRenderer.invoke(IpcChannel.hostsForgetKey, { id }))
+  },
+  ssh: {
+    open: async (request) => SshResultSchema.parse(await ipcRenderer.invoke(IpcChannel.sshOpen, request)),
+    test: async (request) => SshResultSchema.parse(await ipcRenderer.invoke(IpcChannel.sshTest, request)),
+    answer: (answer) => ipcRenderer.send(IpcChannel.sshAnswer, answer),
+    cancel: (sessionId) => ipcRenderer.send(IpcChannel.sshCancel, { sessionId }),
+    onEvent: (listener) => subscribe(IpcChannel.sshEvent, (payload) => SshEventSchema.parse(payload), listener)
   }
 }
 

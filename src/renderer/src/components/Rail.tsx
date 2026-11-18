@@ -13,6 +13,10 @@ export function Rail() {
   )
   const toggleSidebar = useUiStore((state) => state.toggleSidebar)
   const toggleSessionsTab = useUiStore((state) => state.toggleSessionsTab)
+  const serversVisible = useUiStore(
+    (state) => state.sidebarOpen && state.serversTabOpen && state.sidebarTab === 'servers'
+  )
+  const toggleServersTab = useUiStore((state) => state.toggleServersTab)
   const sendOpen = useUiStore((state) => state.sendPanelOpen)
   const launch = useLaunch()
 
@@ -37,6 +41,17 @@ export function Rail() {
         onClick={toggleSessionsTab}
       >
         <Icon name="history" size={18} />
+      </button>
+
+      <button
+        type="button"
+        className="rail-button"
+        aria-label={strings.servers.railTip}
+        aria-pressed={serversVisible}
+        data-tip={strings.servers.railTip}
+        onClick={toggleServersTab}
+      >
+        <Icon name="server" size={18} />
       </button>
 
       <div className="rail__spacer" />

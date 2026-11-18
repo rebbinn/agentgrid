@@ -306,6 +306,7 @@ describe('saving', () => {
       sidebarOpen: true,
       sidebarTab: 'sessions',
       sessionsTabOpen: true,
+      serversTabOpen: false,
       sessionsShowAll: true,
       defaultFontSize: 13,
       defaultShellId: null

@@ -1,6 +1,7 @@
 import { findAgent } from '@shared/agents'
 import { firstCommandToken, isPathLike, isSingleLineCommand } from '@shared/command-text'
 import type {
+  ExitReason,
   TerminalCreateRequest,
   TerminalCreateResult,
   TerminalDataEvent,
@@ -17,6 +18,19 @@ export interface PtyProcess {
   kill(): void
   pause(): void
   resume(): void
+}
+
+export interface TerminalBackend {
+  write(data: string): void
+  resize(cols: number, rows: number): void
+  kill(): void
+  pause(): void
+  resume(): void
+}
+
+export interface RemoteSink {
+  data(text: string): void
+  exit(exitCode: number, reason: ExitReason): void
 }
 
 export interface PtySpawnOptions {
@@ -44,7 +58,7 @@ export const PAUSE_ABOVE_UNACKED = 512 * 1024
 export const RESUME_BELOW_UNACKED = 128 * 1024
 
 interface TerminalEntry {
-  pty: PtyProcess
+  backend: TerminalBackend
   pending: string
   flushTimer: ReturnType<typeof setTimeout> | null
   unacked: number
@@ -74,6 +88,20 @@ export class TerminalService {
 
   get size(): number {
     return this.entries.size
+  }
+
+  has(id: string): boolean {
+    return this.entries.has(id)
+  }
+
+  attachRemote(id: string, backend: TerminalBackend): RemoteSink | null {
+    if (this.entries.has(id)) return null
+    const entry: TerminalEntry = { backend, pending: '', flushTimer: null, unacked: 0, paused: false }
+    this.entries.set(id, entry)
+    return {
+      data: (text) => this.handleData(id, entry, text),
+      exit: (exitCode, reason) => this.handleExit(id, entry, { exitCode }, reason)
+    }
   }
 
   async create(request: TerminalCreateRequest): Promise<TerminalCreateResult> {
@@ -128,7 +156,7 @@ export class TerminalService {
       return { ok: false, code: 'spawn-failed', message }
     }
 
-    const entry: TerminalEntry = { pty, pending: '', flushTimer: null, unacked: 0, paused: false }
+    const entry: TerminalEntry = { backend: pty, pending: '', flushTimer: null, unacked: 0, paused: false }
     this.entries.set(request.id, entry)
 
     pty.onData((data) => this.handleData(request.id, entry, data))
@@ -149,14 +177,14 @@ export class TerminalService {
   }
 
   write(id: string, data: string): void {
-    this.entries.get(id)?.pty.write(data)
+    this.entries.get(id)?.backend.write(data)
   }
 
   resize(id: string, cols: number, rows: number): void {
     const entry = this.entries.get(id)
     if (!entry) return
     try {
-      entry.pty.resize(cols, rows)
+      entry.backend.resize(cols, rows)
     } catch {
       return
     }
@@ -168,7 +196,7 @@ export class TerminalService {
     entry.unacked = Math.max(0, entry.unacked - bytes)
     if (entry.paused && entry.unacked < RESUME_BELOW_UNACKED) {
       entry.paused = false
-      entry.pty.resume()
+      entry.backend.resume()
     }
   }
 
@@ -178,7 +206,7 @@ export class TerminalService {
     this.entries.delete(id)
     if (entry.flushTimer) clearTimeout(entry.flushTimer)
     try {
-      entry.pty.kill()
+      entry.backend.kill()
     } catch {
       return true
     }
@@ -213,18 +241,24 @@ export class TerminalService {
     this.deps.emitData({ id, data })
     if (!entry.paused && entry.unacked > PAUSE_ABOVE_UNACKED) {
       entry.paused = true
-      entry.pty.pause()
+      entry.backend.pause()
     }
   }
 
   private handleExit(
     id: string,
     entry: TerminalEntry,
-    event: { exitCode: number; signal?: number }
+    event: { exitCode: number; signal?: number },
+    reason?: ExitReason
   ): void {
     if (this.entries.get(id) !== entry) return
     this.flush(id, entry)
     this.entries.delete(id)
-    this.deps.emitExit({ id, exitCode: event.exitCode, signal: event.signal })
+    this.deps.emitExit({
+      id,
+      exitCode: event.exitCode,
+      ...(event.signal !== undefined ? { signal: event.signal } : {}),
+      ...(reason ? { reason } : {})
+    })
   }
 }

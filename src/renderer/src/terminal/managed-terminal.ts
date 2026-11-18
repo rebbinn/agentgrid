@@ -4,6 +4,8 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
 import '@xterm/xterm/css/xterm.css'
+import type { ExitReason } from '@shared/ipc'
+import { strings } from '../strings'
 import {
   DEFAULT_FONT_SIZE,
   SCROLLBACK_LINES,
@@ -127,9 +129,10 @@ export class ManagedTerminal {
     return true
   }
 
-  markExited(exitCode: number): void {
+  markExited(exitCode: number, reason?: ExitReason): void {
     this.alive = false
-    this.term.write(`\r\n\x1b[2m[Proses bitdi, çıxış kodu ${exitCode}]\x1b[0m\r\n`)
+    const message = reason ? strings.ssh.exitMessage(reason, exitCode) : `[Proses bitdi, çıxış kodu ${exitCode}]`
+    this.term.write(`\r\n\x1b[2m${message}\x1b[0m\r\n`)
   }
 
   reset(): void {

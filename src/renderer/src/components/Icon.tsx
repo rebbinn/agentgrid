@@ -19,7 +19,11 @@ const PATHS = {
   trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
   maximize: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
-  restore: 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5'
+  restore: 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',
+  server: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
+  download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
+  upload: 'M12 15V4M7 9l5-5 5 5M5 20h14',
+  lock: 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3'
 } as const
 
 export type IconName = keyof typeof PATHS

@@ -41,6 +41,7 @@ export function collectAppState(): AppState {
       sidebarOpen: ui.sidebarOpen,
       sidebarTab: ui.sidebarTab,
       sessionsTabOpen: ui.sessionsTabOpen,
+      serversTabOpen: ui.serversTabOpen,
       sessionsShowAll: useSessionsStore.getState().showAll,
       defaultFontSize: prefs.defaultFontSize,
       defaultShellId: prefs.defaultShellId
@@ -80,15 +81,26 @@ function noticeMessage(notice: SettingsNotice): string {
       return strings.notices.dropped(notice.count ?? 0)
     case 'dropped-presets':
       return strings.notices.droppedPresets(notice.count ?? 0)
+    case 'hosts-unreadable':
+      return strings.notices.hostsUnreadable(file)
+    case 'dropped-hosts':
+      return strings.notices.droppedHosts(notice.count ?? 0)
   }
+}
+
+function tabIsOpen(preferences: Preferences): boolean {
+  if (preferences.sidebarTab === 'sessions') return preferences.sessionsTabOpen
+  if (preferences.sidebarTab === 'servers') return preferences.serversTabOpen
+  return true
 }
 
 function applyPreferences(preferences: Preferences): void {
   const narrow = window.matchMedia(NARROW_QUERY).matches
   useUiStore.setState({
     sidebarOpen: narrow ? false : preferences.sidebarOpen,
-    sidebarTab: preferences.sessionsTabOpen ? preferences.sidebarTab : 'projects',
-    sessionsTabOpen: preferences.sessionsTabOpen
+    sidebarTab: tabIsOpen(preferences) ? preferences.sidebarTab : 'projects',
+    sessionsTabOpen: preferences.sessionsTabOpen,
+    serversTabOpen: preferences.serversTabOpen
   })
   useSessionsStore.setState({ showAll: preferences.sessionsShowAll })
   usePrefsStore.setState({

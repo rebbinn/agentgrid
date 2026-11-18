@@ -1,4 +1,5 @@
 import { KNOWN_AGENTS } from '@shared/agents'
+import { endpointLabel, type HostView } from '@shared/hosts'
 import type { AgentStatus, ClaudeSession, ShellInfo } from '@shared/ipc'
 import type { Preset, Workspace } from '@shared/settings'
 import { folderName } from '../lib/path'
@@ -42,6 +43,7 @@ export interface CommandContext {
   agents: AgentStatus | null
   sessions: readonly ClaudeSession[]
   focusMode: boolean
+  hosts?: readonly HostView[]
 }
 
 const group = strings.commands.groups
@@ -272,6 +274,32 @@ export function buildCommands(context: CommandContext): Command[] {
       group: group.chat,
       keywords: `claude resume ${folderName(session.cwd)}`,
       run: () => openClaudeSession(session)
+    })
+  }
+
+  add({
+    id: 'server.new',
+    title: strings.commands.newServer,
+    group: group.servers,
+    keywords: 'ssh server host yeni əlavə add',
+    run: () => useUiStore.getState().openDialog({ kind: 'host-editor', id: null })
+  })
+  add({
+    id: 'view.servers',
+    title: strings.commands.toggleServers,
+    group: group.view,
+    keywords: 'ssh sftp server serverlər termius',
+    run: () => useUiStore.getState().toggleServersTab()
+  })
+  for (const { host } of context.hosts ?? []) {
+    add({
+      id: `server.${host.id}`,
+      title: strings.commands.connectServer(host.name, host.group),
+      group: group.servers,
+      keywords: `ssh ${endpointLabel(host)} ${host.environment ?? ''}`,
+      run: () => {
+        useTerminalStore.getState().launchSsh(host.id)
+      }
     })
   }
 

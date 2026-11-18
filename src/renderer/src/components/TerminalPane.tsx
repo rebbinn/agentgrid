@@ -9,16 +9,21 @@ import {
   type MouseEvent
 } from 'react'
 import { findAgent } from '@shared/agents'
+import { endpointLabel } from '@shared/hosts'
 import { useClosePane } from '../hooks/use-close-pane'
 import { folderName } from '../lib/path'
 import { withShortcut } from '../lib/shortcuts'
+import { useHostsStore } from '../state/hosts-store'
+import { useSshStore } from '../state/ssh-store'
 import { useTerminalStore, MAX_TITLE_LENGTH, type Pane } from '../state/terminal-store'
 import { useUiStore } from '../state/ui-store'
 import { strings } from '../strings'
 import { terminalRegistry } from '../terminal/registry'
 import { MAX_FONT_SIZE, MIN_FONT_SIZE } from '../terminal/theme'
 import { Dropdown, type DropdownItem } from './Dropdown'
+import { EnvironmentBadge } from './EnvironmentBadge'
 import { Icon } from './Icon'
+import { SshPaneOverlay, sshFooterText } from './SshPaneOverlay'
 import { TerminalView } from './TerminalView'
 
 const DRAG_TYPE = 'application/x-agentgrid-pane'
@@ -50,6 +55,11 @@ function TerminalPaneComponent({
   hidden
 }: TerminalPaneProps) {
   const closePane = useClosePane()
+  const host = useHostsStore((state) =>
+    pane.sshHostId ? state.views.find((view) => view.host.id === pane.sshHostId)?.host : undefined
+  )
+  const latency = useSshStore((state) => state.latency[pane.id])
+  const isSsh = pane.sshHostId !== undefined
   const [renaming, setRenaming] = useState(false)
   const [dropTarget, setDropTarget] = useState(false)
 
@@ -125,7 +135,7 @@ function TerminalPaneComponent({
 
   const menuItems: DropdownItem[] = [
     { id: 'rename', label: strings.pane.rename, onSelect: startRename },
-    { id: 'restart', label: strings.terminal.restart, onSelect: restart },
+    { id: 'restart', label: isSsh ? strings.ssh.reconnect : strings.terminal.restart, onSelect: restart },
     {
       id: 'clear',
       label: strings.terminal.clear,
@@ -179,6 +189,7 @@ function TerminalPaneComponent({
       data-active={active}
       data-status={pane.status}
       data-drop-target={dropTarget}
+      data-env={host?.environment ?? undefined}
       style={
         hidden
           ? { display: 'none' }
@@ -225,10 +236,25 @@ function TerminalPaneComponent({
             {pane.title}
           </span>
         )}
-        <span className="pane__meta" title={pane.cwd}>
-          {pane.shellLabel} · {folderName(pane.cwd)}
-        </span>
+        {isSsh ? (
+          <>
+            <span className="pane__badge">{strings.ssh.badge}</span>
+            {host && (
+              <span className="pane__meta" title={host.note || endpointLabel(host)}>
+                {endpointLabel(host)}
+              </span>
+            )}
+            {host?.environment && <EnvironmentBadge environment={host.environment} />}
+          </>
+        ) : (
+          <span className="pane__meta" title={pane.cwd}>
+            {pane.shellLabel} · {folderName(pane.cwd)}
+          </span>
+        )}
         <span className="pane__spacer" />
+        {isSsh && pane.status === 'running' && latency !== undefined && (
+          <span className="pane__latency">{strings.ssh.latency(latency)}</span>
+        )}
         <button
           type="button"
           className="icon-button"
@@ -255,7 +281,9 @@ function TerminalPaneComponent({
       <div className="pane__body">
         <TerminalView id={pane.id} active={active && !renaming} />
 
-        {pane.status === 'idle' && (
+        {isSsh && <SshPaneOverlay pane={pane} host={host} onClose={() => closePane(pane.id)} />}
+
+        {!isSsh && pane.status === 'idle' && (
           <div className="pane__overlay" role="group" aria-label={strings.restore.overlayTitle}>
             <h2 className="pane__overlay-title pane__overlay-title--info">{strings.restore.overlayTitle}</h2>
             <p className="pane__overlay-text">
@@ -278,7 +306,7 @@ function TerminalPaneComponent({
           </div>
         )}
 
-        {pane.status === 'error' && pane.errorCode && (
+        {!isSsh && pane.status === 'error' && pane.errorCode && (
           <div className="pane__overlay" role="alert">
             <h2 className="pane__overlay-title">{strings.terminal.errorTitle}</h2>
             <p className="pane__overlay-text">
@@ -299,10 +327,10 @@ function TerminalPaneComponent({
 
       {pane.status === 'exited' && (
         <footer className="pane__footer">
-          <span>{strings.terminal.exitedBar(pane.exitCode ?? 0)}</span>
+          <span>{isSsh ? sshFooterText(pane) : strings.terminal.exitedBar(pane.exitCode ?? 0)}</span>
           <button type="button" className="btn" onClick={restart}>
             <Icon name="restart" />
-            {strings.terminal.restart}
+            {isSsh ? strings.ssh.reconnect : strings.terminal.restart}
           </button>
         </footer>
       )}

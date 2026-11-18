@@ -7,6 +7,7 @@ import { useWorkspaceStore } from '../state/workspace-store'
 import { strings } from '../strings'
 import { Icon } from './Icon'
 import { PresetsSection } from './PresetsSection'
+import { ServersPanel } from './ServersPanel'
 import { SessionsPanel } from './SessionsPanel'
 
 function WorkspacesSection() {
@@ -107,21 +108,25 @@ export function Sidebar() {
   const sessionsTabOpen = useUiStore((state) => state.sessionsTabOpen)
   const selectSidebarTab = useUiStore((state) => state.selectSidebarTab)
   const closeSessionsTab = useUiStore((state) => state.closeSessionsTab)
+  const serversTabOpen = useUiStore((state) => state.serversTabOpen)
+  const closeServersTab = useUiStore((state) => state.closeServersTab)
   const showSessions = sessionsTabOpen && sidebarTab === 'sessions'
+  const showServers = serversTabOpen && sidebarTab === 'servers'
 
   return (
     <aside className="sidebar" hidden={!sidebarOpen} aria-label="Layihələr">
-      {sessionsTabOpen && (
+      {(sessionsTabOpen || serversTabOpen) && (
         <div className="sidebar__tabs" role="tablist" aria-label={strings.sessions.tablist}>
           <button
             type="button"
             role="tab"
             className="sidebar-tab"
-            aria-selected={!showSessions}
+            aria-selected={!showSessions && !showServers}
             onClick={() => selectSidebarTab('projects')}
           >
             {strings.sidebar.tabProjects}
           </button>
+          {sessionsTabOpen && (
           <div className="sidebar-tab sidebar-tab--closable" data-selected={showSessions}>
             <button
               type="button"
@@ -142,10 +147,33 @@ export function Sidebar() {
               <Icon name="close" size={12} />
             </button>
           </div>
+          )}
+          {serversTabOpen && (
+            <div className="sidebar-tab sidebar-tab--closable" data-selected={showServers}>
+              <button
+                type="button"
+                role="tab"
+                className="sidebar-tab__label"
+                aria-selected={showServers}
+                onClick={() => selectSidebarTab('servers')}
+              >
+                {strings.servers.tab}
+              </button>
+              <button
+                type="button"
+                className="sidebar-tab__close"
+                aria-label={strings.servers.tabClose}
+                data-tip={strings.servers.tabClose}
+                onClick={closeServersTab}
+              >
+                <Icon name="close" size={12} />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {showSessions ? <SessionsPanel /> : <ProjectsPanel />}
+      {showSessions ? <SessionsPanel /> : showServers ? <ServersPanel /> : <ProjectsPanel />}
     </aside>
   )
 }

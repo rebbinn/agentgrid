@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { AGENT_IDS } from './agents'
+import type { HostSaveRequest, HostSaveResult, HostView, HostsTransferResult, KeyPickResult } from './hosts'
 import { CommandLineSchema, type AppState, type LoadedSettings } from './settings'
+import type { SshAnswer, SshEvent, SshOpenRequest, SshResult, SshTestRequest } from './ssh'
 
 export const IpcChannel = {
   appInfo: 'app:info',
@@ -23,7 +25,19 @@ export const IpcChannel = {
   launchRequest: 'launch:request',
   clipboardRead: 'clipboard:read',
   clipboardWrite: 'clipboard:write',
-  externalOpen: 'external:open'
+  externalOpen: 'external:open',
+  hostsList: 'hosts:list',
+  hostsSave: 'hosts:save',
+  hostsDelete: 'hosts:delete',
+  hostsExport: 'hosts:export',
+  hostsImport: 'hosts:import',
+  hostsPickKey: 'hosts:pick-key',
+  hostsForgetKey: 'hosts:forget-key',
+  sshOpen: 'ssh:open',
+  sshTest: 'ssh:test',
+  sshAnswer: 'ssh:answer',
+  sshCancel: 'ssh:cancel',
+  sshEvent: 'ssh:event'
 } as const
 
 export type IpcChannelName = (typeof IpcChannel)[keyof typeof IpcChannel]
@@ -148,10 +162,14 @@ export const TerminalDataEventSchema = z.object({
 })
 export type TerminalDataEvent = z.infer<typeof TerminalDataEventSchema>
 
+export const EXIT_REASONS = ['exit', 'lost', 'closed'] as const
+export type ExitReason = (typeof EXIT_REASONS)[number]
+
 export const TerminalExitEventSchema = z.object({
   id: TerminalIdSchema,
   exitCode: z.number().int(),
-  signal: z.number().int().optional()
+  signal: z.number().int().optional(),
+  reason: z.enum(EXIT_REASONS).optional()
 })
 export type TerminalExitEvent = z.infer<typeof TerminalExitEventSchema>
 
@@ -200,5 +218,21 @@ export interface AgentGridApi {
   }
   external: {
     open(url: string): Promise<boolean>
+  }
+  hosts: {
+    list(): Promise<HostView[]>
+    save(request: HostSaveRequest): Promise<HostSaveResult>
+    remove(id: string): Promise<void>
+    exportAll(): Promise<HostsTransferResult>
+    importFile(): Promise<HostsTransferResult>
+    pickKey(): Promise<KeyPickResult>
+    forgetHostKey(id: string): Promise<boolean>
+  }
+  ssh: {
+    open(request: SshOpenRequest): Promise<SshResult>
+    test(request: SshTestRequest): Promise<SshResult>
+    answer(answer: SshAnswer): void
+    cancel(sessionId: string): void
+    onEvent(listener: (event: SshEvent) => void): () => void
   }
 }

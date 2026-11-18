@@ -1,10 +1,14 @@
-import { statSync } from 'node:fs'
+import { spawn as spawnProcess } from 'node:child_process'
+import { existsSync, statSync } from 'node:fs'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, BrowserWindow, Menu, screen, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, Menu, safeStorage, screen, session, shell } from 'electron'
 import { spawn as spawnPty } from 'node-pty'
 import { listClaudeSessions } from './claude-sessions'
 import { findOnPath } from './executables'
+import { HostsService } from './hosts-service'
+import { HostsStore } from './hosts-store'
 import { registerIpc } from './ipc'
 import { buildJumpList } from './jump-list'
 import { parseLaunchArgs } from './launch-args'
@@ -16,7 +20,10 @@ import {
   type TrustedEntry
 } from './security'
 import { createShellDiscoveryDeps, discoverShells, type ShellDefinition } from './shells'
+import { SecretStore } from './secret-store'
 import { SettingsStore } from './settings-store'
+import { SshHelper, type HelperChild } from './ssh-helper'
+import { SshService } from './ssh-service'
 import { TerminalService } from './terminal-service'
 import {
   DEFAULT_HEIGHT,
@@ -31,7 +38,15 @@ import { toAppState, type LoadedSettings, type SettingsNotice } from '@shared/se
 
 app.setName('AgentGrid')
 
-const settingsStore = new SettingsStore(app.getPath('userData'))
+const userDataDir = app.getPath('userData')
+const settingsStore = new SettingsStore(userDataDir)
+const hostsStore = new HostsStore(userDataDir)
+const secretStore = new SecretStore(userDataDir, {
+  isAvailable: () => safeStorage.isAsyncEncryptionAvailable(),
+  encrypt: (text) => safeStorage.encryptStringAsync(text),
+  decrypt: async (data) => (await safeStorage.decryptStringAsync(data)).result
+})
+const knownHostsPath = join(userDataDir, 'known_hosts')
 let startupNotices: SettingsNotice[] = []
 
 function loadedSettings(): LoadedSettings {
@@ -132,6 +147,93 @@ const terminals = new TerminalService({
   emitData: (event) => sendToWindow(IpcChannel.terminalData, event),
   emitExit: (event) => sendToWindow(IpcChannel.terminalExit, event)
 })
+
+function helperExecutable(): string {
+  const override = process.env['AGENTGRID_SSH_HELPER']
+  if (override && !app.isPackaged) return override
+  return app.isPackaged
+    ? join(process.resourcesPath, 'bin', 'agentgrid-ssh.exe')
+    : join(app.getAppPath(), 'resources', 'bin', 'agentgrid-ssh.exe')
+}
+
+function startHelper(): HelperChild | null {
+  const executable = helperExecutable()
+  if (!existsSync(executable)) return null
+  const extraKnownHosts = join(app.getPath('home'), '.ssh', 'known_hosts')
+  const child = spawnProcess(
+    executable,
+    ['--known-hosts', knownHostsPath, '--extra-known-hosts', extraKnownHosts],
+    { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }
+  )
+  child.stdout.setEncoding('utf8')
+  child.stderr.setEncoding('utf8')
+  child.stdin.on('error', () => undefined)
+  return {
+    write: (line) => child.stdin.write(line),
+    end: () => child.stdin.end(),
+    kill: () => child.kill(),
+    onStdout: (listener) => child.stdout.on('data', listener),
+    onStderr: (listener) => child.stderr.on('data', listener),
+    onExit: (listener) => {
+      child.once('exit', listener)
+      child.once('error', listener)
+    }
+  }
+}
+
+const sshHelper = new SshHelper(startHelper, (message) => {
+  if (!app.isPackaged) console.warn(`[ssh] ${message}`)
+})
+
+const sshService = new SshService({
+  helper: sshHelper,
+  terminals,
+  hosts: hostsStore,
+  secrets: secretStore,
+  emitEvent: (event) => sendToWindow(IpcChannel.sshEvent, event),
+  now: () => Date.now()
+})
+
+const JSON_FILTER = [{ name: 'JSON', extensions: ['json'] }]
+
+function parentWindowFor<T>(open: (window: BrowserWindow | null) => Promise<T>): Promise<T> {
+  return open(mainWindow && !mainWindow.isDestroyed() ? mainWindow : null)
+}
+
+const hostsService = new HostsService({
+  store: hostsStore,
+  secrets: secretStore,
+  knownHostsPath,
+  chooseExportPath: () =>
+    parentWindowFor(async (window) => {
+      const options = { defaultPath: 'agentgrid-serverler.json', filters: JSON_FILTER }
+      const result = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options)
+      return result.canceled || !result.filePath ? null : result.filePath
+    }),
+  chooseImportPath: () =>
+    parentWindowFor(async (window) => {
+      const options = { properties: ['openFile' as const], filters: JSON_FILTER }
+      const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
+      return result.canceled ? null : (result.filePaths[0] ?? null)
+    }),
+  chooseKeyPath: () =>
+    parentWindowFor(async (window) => {
+      const options = {
+        properties: ['openFile' as const, 'showHiddenFiles' as const],
+        defaultPath: join(app.getPath('home'), '.ssh')
+      }
+      const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
+      return result.canceled ? null : (result.filePaths[0] ?? null)
+    }),
+  readText: (path) => readFile(path, 'utf8'),
+  writeText: (path, text) => writeFile(path, text, 'utf8'),
+  newId: () => crypto.randomUUID()
+})
+
+function stopAllTerminals(): void {
+  terminals.killAll()
+  sshService.cancelAll()
+}
 
 function installSecurityPolicies(): void {
   const csp = devServerUrl ? DEV_CONTENT_SECURITY_POLICY : CONTENT_SECURITY_POLICY
@@ -240,7 +342,7 @@ function createWindow(): void {
 
   window.webContents.on('did-start-navigation', (details) => {
     if (details.isMainFrame && !details.isSameDocument) {
-      terminals.killAll()
+      stopAllTerminals()
       launchRouter.rendererReloaded()
     }
   })
@@ -248,7 +350,7 @@ function createWindow(): void {
   window.on('focus', () => void refreshJumpList())
 
   window.on('closed', () => {
-    terminals.killAll()
+    stopAllTerminals()
     mainWindow = null
   })
 
@@ -278,8 +380,14 @@ if (!hasLock) {
     Menu.setApplicationMenu(null)
     installSecurityPolicies()
     startupNotices = (await settingsStore.load()).notices
+    const hostsReport = await hostsStore.load()
+    await secretStore.load()
+    if (hostsReport.preservedAs) startupNotices.push({ kind: 'hosts-unreadable', backupFile: hostsReport.preservedAs })
+    if (hostsReport.dropped > 0) startupNotices.push({ kind: 'dropped-hosts', count: hostsReport.dropped })
     registerIpc(() => mainWindow, trustedEntry, {
       terminals,
+      hosts: hostsService,
+      ssh: sshService,
       getShells,
       listSessions,
       agentStatus: () => ({
@@ -304,10 +412,11 @@ if (!hasLock) {
 
   let settingsFlushedForQuit = false
   app.on('before-quit', (event) => {
-    terminals.killAll()
+    stopAllTerminals()
+    sshHelper.stop()
     if (settingsFlushedForQuit) return
     event.preventDefault()
-    void settingsStore.flush().finally(() => {
+    void Promise.allSettled([settingsStore.flush(), hostsStore.flush(), secretStore.flush()]).finally(() => {
       settingsFlushedForQuit = true
       app.quit()
     })

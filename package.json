@@ -1,6 +1,6 @@
 {
   "name": "agentgrid",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "description": "Multiple AI agent terminals. One workspace.",
   "main": "./out/main/index.js",
   "private": true,
@@ -11,8 +11,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "dist": "npm run build && electron-builder --win",
-    "dist:dir": "npm run build && electron-builder --win --dir",
+    "build:ssh": "go -C native/ssh-helper build -trimpath -ldflags=\"-s -w\" -o ../../resources/bin/agentgrid-ssh.exe .",
+    "test:ssh": "go -C native/ssh-helper test ./...",
+    "dist": "npm run build:ssh && npm run build && electron-builder --win",
+    "dist:dir": "npm run build:ssh && npm run build && electron-builder --win --dir",
     "icon": "node scripts/build-icon.cjs"
   },
   "dependencies": {

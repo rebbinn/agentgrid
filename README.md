@@ -24,6 +24,17 @@ Claude düyməsinin işləməsi üçün Claude Code kompüterdə quraşdırılm�
 - Ctrl+K əmr paleti, qısayollar, komanda şablonları.
 - Göndərmə paneli: AI-nin verdiyi komandanı yeni tab açmadan mövcud terminala göndərir. Komanda yalnız "Göndər" basanda işləyir.
 - Düzülüş, ayarlar və iş sahələri yadda qalır. Terminalın çıxışı və yazdıqlarınız heç vaxt yazılmır.
+- Serverlər (SSH): soldakı server ikonu "Serverlər" tabını açır. Serverlər müştərilərə görə qruplaşır, hər serverin mühiti (prod, preprod, dev) göstərilir. Terminal grid-də adi panel kimi açılır, eyni serverə bir neçə terminal açmaq olar.
+
+## SSH
+
+- Giriş üsulları: parol, SSH açarı (parollu açar da), Windows ssh-agent, iki addımlı kod. Jump host (bastion) üzərindən də qoşulmaq olur.
+- Parollar Windows-un öz şifrələməsi ilə `%APPDATA%\AgentGrid\secrets.json` faylında saxlanır. Server siyahısı (`hosts.json`) parolsuzdur.
+- İlk qoşulmada serverin barmaq izi soruşulur. İz sonradan dəyişsə, proqram qoşulmur və xəbərdarlıq edir.
+- Prod serverin terminalının çərçivəsi qırmızıdır və qoşulmazdan əvvəl təsdiq soruşulur. "Hamısını başlat" prod serverlərə heç vaxt qoşulmur.
+- Siyahını komanda yoldaşları ilə paylaşmaq olar: Serverlər tabında "⋯" düyməsinə basıb "İxrac et" seçirsiniz, alınan faylı onlar "İdxal et" ilə götürürlər. Parollar fayla düşmür.
+
+SSH işini ayrıca kiçik proqram, `agentgrid-ssh.exe` görür. O, Go dilində yazılıb (`native/ssh-helper`) və yalnız ilk qoşulmada işə düşür.
 
 Proqram bağlananda terminal prosesləri dayanır. Yenidən açanda terminallar "Gözləyir" vəziyyətində gəlir və özbaşına başlamır.
 
@@ -47,14 +58,18 @@ Terminalın öz düymələri (Ctrl+C, Ctrl+D, Ctrl+R və s.) toxunulmazdır. Yeg
 
 ## Yığmaq
 
-Node.js lazımdır.
+Node.js və Go (1.27+) lazımdır.
 
 ```
 npm install
+npm run build:ssh
 npm run dev
 npm test
+npm run test:ssh
 npm run dist
 ```
+
+`npm run build:ssh` SSH köməkçisini `resources/bin/agentgrid-ssh.exe` faylına yığır. `npm run dist` bunu özü edir.
 
 `npm run dist` quraşdırıcını `release/` qovluğuna yığır.
 

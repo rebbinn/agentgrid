@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 export type ToastKind = 'success' | 'warning' | 'error'
-export type SidebarTab = 'projects' | 'sessions'
+export type SidebarTab = 'projects' | 'sessions' | 'servers'
 
 export type AppDialog =
   | { kind: 'new-workspace' }
@@ -11,6 +11,8 @@ export type AppDialog =
   | { kind: 'launch' }
   | { kind: 'preset-editor'; id: string | null }
   | { kind: 'delete-preset'; id: string }
+  | { kind: 'host-editor'; id: string | null; copyOf?: string }
+  | { kind: 'delete-host'; id: string }
 
 export interface Toast {
   id: number
@@ -22,6 +24,7 @@ interface UiState {
   sidebarOpen: boolean
   sidebarTab: SidebarTab
   sessionsTabOpen: boolean
+  serversTabOpen: boolean
   toasts: Toast[]
   pendingCloseId: string | null
   dialog: AppDialog | null
@@ -43,6 +46,8 @@ interface UiState {
   selectSidebarTab: (tab: SidebarTab) => void
   toggleSessionsTab: () => void
   closeSessionsTab: () => void
+  toggleServersTab: () => void
+  closeServersTab: () => void
   pushToast: (kind: ToastKind, message: string) => number
   dismissToast: (id: number) => void
 }
@@ -53,6 +58,7 @@ export const useUiStore = create<UiState>((set) => ({
   sidebarOpen: true,
   sidebarTab: 'projects',
   sessionsTabOpen: false,
+  serversTabOpen: false,
   toasts: [],
   pendingCloseId: null,
   dialog: null,
@@ -82,6 +88,17 @@ export const useUiStore = create<UiState>((set) => ({
     set((state) => ({
       sessionsTabOpen: false,
       sidebarTab: state.sidebarTab === 'sessions' ? 'projects' : state.sidebarTab
+    })),
+  toggleServersTab: () =>
+    set((state) => {
+      const visible = state.sidebarOpen && state.serversTabOpen && state.sidebarTab === 'servers'
+      if (visible) return { serversTabOpen: false, sidebarTab: 'projects' }
+      return { serversTabOpen: true, sidebarTab: 'servers', sidebarOpen: true }
+    }),
+  closeServersTab: () =>
+    set((state) => ({
+      serversTabOpen: false,
+      sidebarTab: state.sidebarTab === 'servers' ? 'projects' : state.sidebarTab
     })),
   pushToast: (kind, message) => {
     const id = nextToastId++

@@ -30,10 +30,14 @@ export const SavedPaneSchema = z
     resumeSessionId: z.uuid().optional(),
     startupCommand: CommandLineSchema.optional(),
     commandKind: z.enum(PRESET_KINDS).optional(),
+    sshHostId: z.uuid().optional(),
     fontSize: z.number().int().min(9).max(28)
   })
   .refine((pane) => pane.resumeSessionId === undefined || pane.agentId === 'claude')
   .refine((pane) => pane.startupCommand === undefined || pane.agentId === undefined)
+  .refine(
+    (pane) => pane.sshHostId === undefined || (pane.agentId === undefined && pane.startupCommand === undefined)
+  )
 export type SavedPane = z.infer<typeof SavedPaneSchema>
 
 export const PresetSchema = z
@@ -73,8 +77,9 @@ export const DEFAULT_TERMINAL_FONT_SIZE = 13
 
 export const PreferencesSchema = z.object({
   sidebarOpen: z.boolean(),
-  sidebarTab: z.enum(['projects', 'sessions']),
+  sidebarTab: z.enum(['projects', 'sessions', 'servers']),
   sessionsTabOpen: z.boolean(),
+  serversTabOpen: z.boolean().default(false),
   sessionsShowAll: z.boolean(),
   defaultFontSize: z.number().int().min(9).max(28).default(DEFAULT_TERMINAL_FONT_SIZE),
   defaultShellId: z.string().min(1).max(128).nullable().default(null)
@@ -110,7 +115,9 @@ export const SETTINGS_NOTICE_KINDS = [
   'dropped-presets',
   'reset-corrupt',
   'recovered-from-backup',
-  'newer-version'
+  'newer-version',
+  'hosts-unreadable',
+  'dropped-hosts'
 ] as const
 
 export const SettingsNoticeSchema = z.object({
@@ -134,6 +141,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   sidebarOpen: true,
   sidebarTab: 'projects',
   sessionsTabOpen: false,
+  serversTabOpen: false,
   sessionsShowAll: false,
   defaultFontSize: DEFAULT_TERMINAL_FONT_SIZE,
   defaultShellId: null

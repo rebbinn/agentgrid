@@ -13,6 +13,9 @@ export function StatusBar() {
   const activeTitle = useTerminalStore(
     (state) => state.panes.find((pane) => pane.id === state.activePaneId)?.title ?? null
   )
+  const sshConnected = useTerminalStore(
+    (state) => state.panes.filter((pane) => pane.sshHostId && pane.status === 'running').length
+  )
   const preset = useLayoutStore((state) => state.preset)
   const focusMode = useLayoutStore((state) => state.focusMode)
   const [info, setInfo] = useState<AppInfo | null>(null)
@@ -42,6 +45,7 @@ export function StatusBar() {
         </span>
       )}
       <span className="statusbar__spacer" />
+      {sshConnected > 0 && <span className="statusbar__item">{strings.ssh.statusConnected(sshConnected)}</span>}
       {activeTitle && <span className="statusbar__item">{strings.status.active(activeTitle)}</span>}
       {paneCount > 0 && (
         <span className="statusbar__item">

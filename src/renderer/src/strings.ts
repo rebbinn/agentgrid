@@ -1,4 +1,5 @@
 import type { TerminalErrorCode } from '@shared/ipc'
+import type { SshErrorCode } from '@shared/ssh'
 
 export const strings = {
   appName: 'AgentGrid',
@@ -105,7 +106,10 @@ export const strings = {
     newer: (file: string) =>
       `Ayarlar faylı bu proqramdan daha yeni versiyaya aiddir. Ona toxunmadım ("${file}" adı ilə saxlanıb), boş ayarlarla başladım.`,
     dropped: (count: number) => `${count} iş sahəsi oxuna bilmədi və atlandı.`,
-    droppedPresets: (count: number) => `${count} şablon oxuna bilmədi və atlandı.`
+    droppedPresets: (count: number) => `${count} şablon oxuna bilmədi və atlandı.`,
+    hostsUnreadable: (file: string) =>
+      `Server siyahısı faylı oxuna bilmədi. Köhnə fayl "${file}" adı ilə saxlanıb, siyahı boş başladı.`,
+    droppedHosts: (count: number) => `${count} server oxuna bilmədi və atlandı.`
   },
   palette: {
     open: 'Əmrlər',
@@ -124,6 +128,7 @@ export const strings = {
       workspace: 'İş sahəsi',
       goto: 'Terminala keç',
       chat: 'Söhbət',
+      servers: 'Server',
       view: 'Görünüş',
       settings: 'Ayarlar'
     },
@@ -155,7 +160,11 @@ export const strings = {
     openChat: (title: string) => `Söhbəti aç: ${title}`,
     toggleChats: 'Söhbətlər tabını aç / bağla',
     toggleSidebar: 'Yan paneli göstər / gizlət',
-    openSettings: 'Ayarları aç'
+    openSettings: 'Ayarları aç',
+    newServer: 'Yeni server…',
+    toggleServers: 'Serverlər tabını aç / bağla',
+    connectServer: (name: string, group: string) =>
+      group ? `Serverə qoşul: ${name} (${group})` : `Serverə qoşul: ${name}`
   },
   send: {
     title: 'Komandanı terminala göndər',
@@ -358,6 +367,194 @@ export const strings = {
           return 'Bu terminal artıq açılıb.'
         case 'spawn-failed':
           return `Proses işə düşmədi: ${detail}`
+      }
+    }
+  },
+  servers: {
+    tab: 'Serverlər',
+    tabClose: 'Serverlər tabını bağla',
+    railTip: 'Serverlər (SSH)',
+    searchLabel: 'Serverlərdə axtar',
+    searchPlaceholder: 'Ad, müştəri və ya IP…',
+    add: 'Yeni server',
+    menu: 'Siyahı əməliyyatları',
+    exportAll: 'Siyahını fayla ixrac et (parolsuz)…',
+    importFile: 'Fayldan idxal et…',
+    ungrouped: 'Qrupsuz',
+    groupToggle: (name: string, open: boolean) => (open ? `${name} qrupunu yığ` : `${name} qrupunu aç`),
+    listLabel: 'Serverlər',
+    empty: 'Hələ server yoxdur. "Yeni server" düyməsi ilə əlavə edin.',
+    emptySearch: 'Axtarışa uyğun server yoxdur.',
+    loadFailed: 'Server siyahısı oxuna bilmədi.',
+    retry: 'Yenidən cəhd et',
+    count: (total: number, connected: number) =>
+      connected > 0 ? `${total} server · ${connected} qoşulu` : `${total} server`,
+    connected: 'Qoşulub',
+    openTerminal: 'Terminal aç',
+    openTerminalFor: (name: string) => `${name}: yeni terminal`,
+    edit: 'Redaktə et…',
+    duplicate: 'Kopyasını çıxar',
+    copyAddress: 'Ünvanı kopyala',
+    remove: 'Sil…',
+    rowMenu: (name: string) => `${name} menyusu`,
+    addressCopied: 'Ünvan kopyalandı',
+    jumpVia: (name: string) => `jump host: ${name}`,
+    copySuffix: ' (kopya)',
+    environments: { prod: 'prod', preprod: 'preprod', dev: 'dev' },
+    exported: (count: number) => `${count} server fayla yazıldı. Parollar fayla düşmədi.`,
+    imported: (added: number, skipped: number, invalid: number) =>
+      [
+        `${added} server əlavə olundu.`,
+        skipped > 0 ? `${skipped} server artıq var idi, toxunmadım.` : '',
+        invalid > 0 ? `${invalid} yazı oxuna bilmədi.` : ''
+      ]
+        .filter(Boolean)
+        .join(' '),
+    transferFailed: {
+      read: 'Fayl oxuna bilmədi.',
+      write: 'Fayl yazıla bilmədi.',
+      format: 'Bu fayl AgentGrid-in server siyahısı deyil.',
+      'too-many': 'Server limiti (500) aşılır, idxal edilmədi.'
+    },
+    deleteDialog: {
+      title: 'Server silinsin?',
+      text: (name: string) =>
+        `"${name}" siyahıdan silinəcək, saxlanmış parolu da silinəcək. Açıq terminallar bağlanmayacaq.`,
+      usedAsJump: (count: number) => ` ${count} server bunu jump host kimi işlədir, onlarda jump host götürüləcək.`,
+      confirm: 'Sil'
+    },
+    editor: {
+      createTitle: 'Yeni server',
+      editTitle: 'Serveri redaktə et',
+      name: 'Ad',
+      group: 'Müştəri / qrup',
+      groupHint: 'Siyahıda serverlər bu ada görə qruplaşır.',
+      address: 'Ünvan',
+      addressPlaceholder: '10.20.4.11 və ya server.example.com',
+      port: 'Port',
+      username: 'İstifadəçi',
+      auth: 'Giriş üsulu',
+      authPassword: 'Parol',
+      authKey: 'SSH açarı',
+      authAgent: 'ssh-agent',
+      password: 'Parol',
+      passwordStoredPlaceholder: '•••••••• (saxlanıb)',
+      passwordHint: 'Windows-un şifrələməsi ilə yalnız bu kompüterdə saxlanır. Boş qoysanız, qoşulanda soruşulacaq.',
+      passwordKeepHint: 'Parol saxlanıb. Dəyişmək üçün yenisini yazın, boş qoysanız köhnəsi qalır.',
+      forgetPassword: 'Saxlanmış parolu sil',
+      passwordWillBeRemoved: 'Saxlanmış parol silinəcək.',
+      keepPassword: 'Silmə',
+      keyFile: 'Açar faylı',
+      chooseKey: 'Seç…',
+      noKey: 'Fayl seçilməyib',
+      passphrase: 'Açarın parolu (varsa)',
+      passphraseStoredPlaceholder: '•••••••• (saxlanıb)',
+      agentHint: 'Windows-un OpenSSH agentindəki açarlar işlədiləcək.',
+      environment: 'Mühit',
+      environmentNone: 'Seçilməyib',
+      prodNote: 'Prod serverə qoşulmazdan əvvəl təsdiq soruşulacaq və terminalın çərçivəsi qırmızı olacaq.',
+      jump: 'Jump host',
+      jumpNone: 'Yoxdur (birbaşa qoşul)',
+      note: 'Qeyd',
+      test: 'Bağlantını yoxla',
+      testing: 'Yoxlanır…',
+      testOk: 'Bağlantı alındı, giriş uğurludur.',
+      cancel: 'Ləğv et',
+      save: 'Saxla',
+      saved: (name: string) => `"${name}" saxlandı.`,
+      errors: {
+        nameRequired: 'Ad boş ola bilməz.',
+        addressInvalid: 'Ünvan düzgün deyil: boşluq və xüsusi simvol olmamalıdır.',
+        portInvalid: 'Port 1 ilə 65535 arasında olmalıdır.',
+        usernameInvalid: 'İstifadəçi adı düzgün deyil: boşluq olmamalıdır.',
+        keyRequired: 'SSH açarı faylını seçin.',
+        'too-many': 'Server limiti dolub (500).',
+        'jump-missing': 'Seçilmiş jump host artıq yoxdur.',
+        'jump-nested':
+          'Jump host-un özünün jump host-u ola bilməz. Başqa serverlərin jump host kimi işlətdiyi serverə də jump host verilə bilməz.',
+        invalid: 'Məlumat düzgün deyil.',
+        saveFailed: 'Saxlamaq alınmadı.'
+      }
+    }
+  },
+  ssh: {
+    badge: 'SSH',
+    latency: (ms: number) => `${ms} ms`,
+    phase: (phase: 'connecting' | 'authenticating', host: string) =>
+      phase === 'connecting' ? `${host}: qoşulur…` : `${host}: giriş yoxlanır…`,
+    starting: 'Qoşulur…',
+    cancel: 'Ləğv et',
+    connect: 'Qoşul',
+    savedTitle: 'SSH terminalı',
+    savedText: (name: string, endpoint: string) => `${name} · ${endpoint}. Bağlantı yoxdur.`,
+    hostGone: 'Bu server siyahıdan silinib.',
+    prodTitle: 'Bu PROD serverdir',
+    prodText: (name: string, group: string) => (group ? `${name} (${group})` : name),
+    prodHint: 'Enter: qoşul · Esc: ləğv et',
+    hostKeyTitle: 'Bu serverə ilk dəfə qoşulursunuz',
+    hostKeyText: (host: string, address: string) =>
+      `${host} (${address}) serverinin barmaq izi hələ tanınmır. Barmaq izi serverin administratorunun verdiyi ilə eynidirsə, qəbul edin.`,
+    hostKeyAccept: 'Qəbul et və qoşul',
+    hostKeyReject: 'Ləğv et',
+    promptTitle: (kind: 'password' | 'passphrase' | 'keyboard-interactive', host: string) =>
+      kind === 'password'
+        ? `${host}: parol`
+        : kind === 'passphrase'
+          ? `${host}: açarın parolu`
+          : `${host}: əlavə yoxlama`,
+    answerLabel: (index: number) => `Cavab ${index + 1}`,
+    remember: 'Yadda saxla (şifrəli, yalnız bu kompüterdə)',
+    submit: 'Davam et',
+    exitedBar: (code: number) => `Bağlantı bağlandı (çıxış kodu ${code})`,
+    lostBar: 'Bağlantı qopdu',
+    closedBar: 'Bağlantı bağlandı',
+    reconnect: 'Yenidən qoşul',
+    errorTitle: 'Qoşulmaq alınmadı',
+    forgetKey: 'Köhnə izi unut və yenidən qoşul',
+    forgetKeyWarning:
+      'Bunu yalnız serverin açarının həqiqətən dəyişdiyini bilirsinizsə edin (məsələn, server yenidən qurulub). Əks halda kimsə bağlantını ələ keçirməyə çalışa bilər.',
+    keyNotForgotten: (file: string) =>
+      `Köhnə iz AgentGrid-in faylında deyil. Onu bu fayldan özünüz silməlisiniz: ${file}`,
+    statusConnected: (count: number) => `SSH: ${count} qoşulu`,
+    exitMessage: (reason: 'exit' | 'lost' | 'closed', code: number) =>
+      reason === 'lost'
+        ? '[Bağlantı qopdu]'
+        : reason === 'closed'
+          ? '[Bağlantı bağlandı]'
+          : `[Bağlantı bağlandı, çıxış kodu ${code}]`,
+    errorText: (code: SshErrorCode, host: string, message: string): string => {
+      const name = host || 'Server'
+      switch (code) {
+        case 'host-missing':
+          return 'Bu server siyahıda yoxdur, silinib.'
+        case 'helper-missing':
+          return 'SSH köməkçi proqramı (agentgrid-ssh.exe) tapılmadı. Proqramı yenidən quraşdırın.'
+        case 'duplicate-id':
+          return 'Bu terminal artıq qoşulub.'
+        case 'dns':
+          return `${name}: ünvan tapılmadı. Ünvanı və VPN-i yoxlayın.`
+        case 'refused':
+          return `${name} bağlantını rədd etdi. Port düzgündür? Serverdə SSH işləyir?`
+        case 'timeout':
+          return `${name} cavab vermədi. Şəbəkəni və VPN-i yoxlayın.`
+        case 'unreachable':
+          return `${name} əlçatan deyil. Şəbəkəni və VPN-i yoxlayın.`
+        case 'auth':
+          return `${name}: giriş alınmadı. İstifadəçi adı, parol və ya açar səhvdir.`
+        case 'hostkey-changed':
+          return `${name} serverinin barmaq izi dəyişib. Bu, server yenidən qurulanda olur, amma kimsə bağlantını ələ keçirməyə çalışanda da olur. Qoşulmadım.`
+        case 'hostkey-rejected':
+          return 'Barmaq izi qəbul edilmədi, qoşulmadım.'
+        case 'cancelled':
+          return 'Qoşulma ləğv edildi.'
+        case 'key-file':
+          return `Açar faylı oxuna bilmədi. ${message}`
+        case 'agent-unavailable':
+          return 'ssh-agent işləmir. Windows-da "OpenSSH Authentication Agent" xidmətini başladın.'
+        case 'jump':
+          return `Jump host ilə problem: ${message}`
+        case 'other':
+          return message ? `Xəta: ${message}` : 'Naməlum xəta.'
       }
     }
   },
