@@ -41,7 +41,8 @@ const REMOTE: Record<string, RemoteEntry[]> = {
     { name: 'app.log', kind: 'file', size: 2048, mtime: 1_700_000_000_000, mode: 0o644 },
     { name: '.bashrc', kind: 'file', size: 10, mtime: 1_700_000_000_000, mode: 0o644 }
   ],
-  '/home/deploy/app': []
+  '/home/deploy/app': [{ name: 'main.py', kind: 'file', size: 10, mtime: 1_700_000_000_000, mode: 0o644 }],
+  '/home/deploy/empty': []
 }
 
 let api: AgentGridMock
@@ -240,6 +241,40 @@ describe('the SFTP pane', () => {
     fireEvent.keyDown(path, { key: 'ArrowDown' })
     expect(document.activeElement).toBe(option(local, 'b.txt'))
     expect(selected()).toEqual(['b.txt'])
+  })
+
+  it('keeps the keyboard in the list when going into a folder and back out', async () => {
+    const { remote } = await openSftp()
+    const selected = (): string[] => useSftpStore.getState().listings[useTerminalStore.getState().panes[0]!.id]!.remote.selected
+    const folder = option(remote, 'app')
+    fireEvent.mouseDown(folder)
+    folder.focus()
+    fireEvent.keyDown(folder, { key: 'Enter' })
+    await waitFor(() => expect(document.activeElement).toBe(option(remote, 'main.py')))
+    expect(selected()).toEqual(['main.py'])
+
+    fireEvent.keyDown(document.activeElement!, { key: 'Backspace' })
+    await waitFor(() => expect(document.activeElement).toBe(option(remote, 'app')))
+    expect(selected()).toEqual(['app'])
+
+    fireEvent.keyDown(document.activeElement!, { key: 'a' })
+    fireEvent.keyDown(document.activeElement!, { key: 'p' })
+    fireEvent.keyDown(document.activeElement!, { key: 'p' })
+    fireEvent.keyDown(document.activeElement!, { key: '.' })
+    expect(document.activeElement).toBe(option(remote, 'app.log'))
+  })
+
+  it('keeps the keyboard in an empty folder so Backspace still goes back', async () => {
+    REMOTE['/home/deploy']!.push({ name: 'empty', kind: 'dir', size: 0, mtime: 1_700_000_000_000, mode: 0o755 })
+    try {
+      const { remote } = await openSftp()
+      fireEvent.doubleClick(option(remote, 'empty'))
+      await waitFor(() => expect(document.activeElement).toBe(remote))
+      fireEvent.keyDown(remote, { key: 'Backspace' })
+      await waitFor(() => expect(document.activeElement).toBe(option(remote, 'empty')))
+    } finally {
+      REMOTE['/home/deploy']!.pop()
+    }
   })
 
   it('opens terminal and SFTP side by side with a single login', async () => {

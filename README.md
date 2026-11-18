@@ -42,7 +42,7 @@ Claude düyməsinin işləməsi üçün Claude Code kompüterdə quraşdırılm�
 - Solda bu kompüter, sağda server görünür. Faylı və ya qovluğu o biri tərəfə sürükləmək, Explorer-dən atmaq, "Yüklə" və "Endir" düymələri, iki dəfə klik ilə köçürmək olar.
 - Köçürmə növbəsində sürət və qalan vaxt görünür, köçürməni ləğv etmək olur. Fayl tam köçməyincə öz adını almır, ona görə yarımçıq fayl qalmır.
 - Serverdə yeni qovluq yaratmaq (+), ad dəyişmək (F2), silmək (Del, təsdiqlə) və icazələri dəyişmək olur.
-- Klaviatura: SFTP paneli açılanda ↓ basın, "Bu kompüter" siyahısına düşürsünüz. Fayllar arasında ↑ ↓ ilə keçilir, Enter qovluğa girir, Backspace bir qovluq yuxarı çıxır. Ünvan sətrində ↓ basanda da siyahıya keçirsiniz.
+- Klaviatura: SFTP paneli açılanda ↓ basın, "Bu kompüter" siyahısına düşürsünüz. Fayllar arasında ↑ ↓ ilə keçilir, Enter qovluğa girir, Backspace bir qovluq yuxarı çıxır. Qovluğa girəndə və geri çıxanda klaviatura siyahıda qalır, yenidən klik etmək lazım deyil. Ünvan sətrində ↓ basanda da siyahıya keçirsiniz.
 - Siyahıda hərf yazanda həmin hərflərlə başlayan fayl seçilir (yalnız açıq qovluqda): `c` → C, `ca` → CA, `cab` → CAB. Bir saniyə yazmasanız axtarış sıfırlanır. Eyni hərfi təkrar basanda həmin hərflə başlayan fayllar arasında növbə ilə keçir.
 - **Redaktorda aç** (sağ klik): fayl kompüterə endirilir və VS Code-da açılır, VS Code yoxdursa Notepad-da. Hər dəfə saxlayanda fayl serverə özü yüklənir. Fayl heç vaxt işə salınmır, yalnız redaktorda açılır.
 - Bağlantı qopsa, köçürmənin yanında **Davam et** düyməsi çıxır. Köçürmə qaldığı yerdən davam edir, başdan başlamır.

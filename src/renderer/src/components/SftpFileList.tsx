@@ -40,6 +40,14 @@ export function enterFileList(list: Element | null | undefined, paneId: string, 
   return true
 }
 
+function rowNamed(list: Element, name: string): HTMLElement | undefined {
+  return Array.from(list.querySelectorAll<HTMLElement>('[role="option"]')).find((row) => row.dataset['name'] === name)
+}
+
+function lastSegment(path: string): string | null {
+  return path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || null
+}
+
 function entryIcon(entry: FileEntry): 'folder' | 'file' | 'link' {
   if (isDirectoryLike(entry)) return 'folder'
   return entry.kind === 'link' ? 'link' : 'file'
@@ -65,6 +73,7 @@ export function SftpFileList({
   const typedRef = useRef('')
   const typedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [typed, setTyped] = useState('')
+  const pendingFocus = useRef<{ select: string | null } | null>(null)
 
   const clearTyped = (): void => {
     if (typedTimer.current) clearTimeout(typedTimer.current)
@@ -79,12 +88,38 @@ export function SftpFileList({
   const parent = side === 'remote' ? remoteParent(listing.path) : localParent(listing.path)
   const canGoUp = side === 'remote' ? listing.path !== '/' : parent !== null
 
+  useEffect(() => {
+    const pending = pendingFocus.current
+    const list = listRef.current
+    if (!pending || !list || listing.status === 'loading') return
+    pendingFocus.current = null
+    const focused = document.activeElement
+    const scope = list.closest('.sftp') ?? list.parentElement
+    if (focused && focused !== document.body && !scope?.contains(focused)) return
+    const cameFrom = pending.select ? rowNamed(list, pending.select) : undefined
+    if (cameFrom && pending.select) {
+      cameFrom.focus()
+      selectEntry(paneId, side, pending.select, 'single', order)
+    } else if (!enterFileList(list, paneId, side)) {
+      list.focus()
+    }
+  }, [listing.status, listing.path, entries, order, paneId, side])
+
+  const goTo = (path: string, select: string | null = null): void => {
+    pendingFocus.current = { select }
+    void navigate(paneId, side, path)
+  }
+
+  const goUp = (): void => {
+    if (canGoUp && parent) goTo(parent, lastSegment(listing.path))
+  }
+
   const open = (entry: FileEntry): void => {
     if (isDirectoryLike(entry)) {
       const next = side === 'remote'
         ? (listing.path.endsWith('/') ? listing.path : `${listing.path}/`) + entry.name
         : (listing.path.endsWith('\\') ? listing.path : `${listing.path}\\`) + entry.name
-      void navigate(paneId, side, next)
+      goTo(next)
     } else {
       onOpenFile(entry)
     }
@@ -120,7 +155,7 @@ export function SftpFileList({
       focusRow(index + (event.key === 'ArrowDown' ? 1 : -1))
     } else if (event.key === 'Backspace' && canGoUp && parent) {
       event.preventDefault()
-      void navigate(paneId, side, parent)
+      goUp()
     } else if (event.key === 'Delete') {
       event.preventDefault()
       onKeyCommand('delete', entry)
@@ -175,7 +210,7 @@ export function SftpFileList({
           aria-label={texts.up}
           title={texts.up}
           disabled={!canGoUp}
-          onClick={() => parent && void navigate(paneId, side, parent)}
+          onClick={goUp}
         >
           <Icon name="up" size={14} />
         </button>
@@ -231,9 +266,19 @@ export function SftpFileList({
         ref={listRef}
         className="sftp-list__rows"
         role="listbox"
+        tabIndex={-1}
         aria-multiselectable="true"
         aria-label={texts.listLabel(label)}
         data-side={side}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return
+          if (event.key === 'Backspace' && canGoUp) {
+            event.preventDefault()
+            goUp()
+          } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && enterFileList(listRef.current, paneId, side)) {
+            event.preventDefault()
+          }
+        }}
         onDragOver={(event) => {
           if (!accepts(event)) return
           event.preventDefault()

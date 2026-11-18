@@ -2067,6 +2067,11 @@ select.dialog__input {
   background: var(--accent-soft);
 }
 
+.sftp:focus-visible,
+.sftp-list__rows:focus-visible {
+  outline: none;
+}
+
 .sftp-row:focus-visible {
   outline: 1px solid var(--accent-line);
   outline-offset: -1px;
