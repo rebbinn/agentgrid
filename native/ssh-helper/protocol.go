@@ -87,44 +87,77 @@ func (h *hostSpec) dialAddress() string {
 }
 
 type command struct {
-	Op      string          `json:"op"`
-	Sid     json.RawMessage `json:"sid"`
-	Mode    string          `json:"mode"`
-	Target  *hostSpec       `json:"target"`
-	Jump    *hostSpec       `json:"jump"`
-	Cols    int             `json:"cols"`
-	Rows    int             `json:"rows"`
-	Data    string          `json:"data"`
-	Rid     json.RawMessage `json:"rid"`
-	Accept  *bool           `json:"accept"`
-	Answers []string        `json:"answers"`
-	Cancel  bool            `json:"cancel"`
+	Op         string          `json:"op"`
+	Sid        json.RawMessage `json:"sid"`
+	Mode       json.RawMessage `json:"mode"`
+	Target     *hostSpec       `json:"target"`
+	Jump       *hostSpec       `json:"jump"`
+	Via        json.RawMessage `json:"via"`
+	Cols       int             `json:"cols"`
+	Rows       int             `json:"rows"`
+	Data       string          `json:"data"`
+	Rid        json.RawMessage `json:"rid"`
+	Accept     *bool           `json:"accept"`
+	Answers    []string        `json:"answers"`
+	Cancel     bool            `json:"cancel"`
+	Path       string          `json:"path"`
+	From       string          `json:"from"`
+	To         string          `json:"to"`
+	Recursive  bool            `json:"recursive"`
+	Tid        json.RawMessage `json:"tid"`
+	LocalPath  string          `json:"localPath"`
+	RemotePath string          `json:"remotePath"`
+	Overwrite  bool            `json:"overwrite"`
 }
 
-type sessionID struct {
+func (c *command) modeName() string {
+	value, _ := decodeScalar(c.Mode)
+	name, _ := value.(string)
+	return name
+}
+
+func (c *command) permissionBits() (uint32, bool) {
+	value, _ := decodeScalar(c.Mode)
+	number, ok := value.(json.Number)
+	if !ok {
+		return 0, false
+	}
+	bits, err := strconv.ParseUint(number.String(), 10, 32)
+	if err != nil || bits > 0o7777 {
+		return 0, false
+	}
+	return uint32(bits), true
+}
+
+func (c *command) hasVia() bool {
+	value, ok := decodeScalar(c.Via)
+	return ok && value != nil
+}
+
+type opaqueID struct {
 	key string
 	raw json.RawMessage
 }
 
-func parseSessionID(raw json.RawMessage) (sessionID, bool) {
+func parseOpaqueID(raw json.RawMessage) (opaqueID, bool) {
 	value, ok := decodeScalar(raw)
 	if !ok {
-		return sessionID{}, false
+		return opaqueID{}, false
 	}
 	switch v := value.(type) {
 	case string:
 		if v == "" {
-			return sessionID{}, false
+			return opaqueID{}, false
 		}
 		encoded, _ := json.Marshal(v)
-		return sessionID{key: "s:" + v, raw: encoded}, true
+		return opaqueID{key: "s:" + v, raw: encoded}, true
 	case json.Number:
-		return sessionID{key: "n:" + v.String(), raw: json.RawMessage(v.String())}, true
+		return opaqueID{key: "n:" + v.String(), raw: json.RawMessage(v.String())}, true
 	}
-	return sessionID{}, false
+	return opaqueID{}, false
 }
 
-func parseRequestID(raw json.RawMessage) (string, bool) {
+func parseQuestionID(raw json.RawMessage) (string, bool) {
 	value, ok := decodeScalar(raw)
 	if !ok {
 		return "", false
@@ -243,7 +276,57 @@ func (f *failure) Error() string {
 	return f.kind + ": " + f.message
 }
 
-func failedEventFor(id sessionID, f *failure) failedEvent {
+type sftpReadyEvent struct {
+	Ev   string          `json:"ev"`
+	Sid  json.RawMessage `json:"sid"`
+	Home string          `json:"home"`
+}
+
+type sftpError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type sftpEntry struct {
+	Name       string `json:"name"`
+	Kind       string `json:"kind"`
+	Size       int64  `json:"size"`
+	Mtime      int64  `json:"mtime"`
+	Mode       uint32 `json:"mode"`
+	Target     string `json:"target,omitempty"`
+	TargetKind string `json:"targetKind,omitempty"`
+}
+
+type sftpReplyEvent struct {
+	Ev      string          `json:"ev"`
+	Sid     json.RawMessage `json:"sid"`
+	Rid     json.RawMessage `json:"rid"`
+	Ok      bool            `json:"ok"`
+	Path    string          `json:"path,omitempty"`
+	Entries *[]sftpEntry    `json:"entries,omitempty"`
+	Error   *sftpError      `json:"error,omitempty"`
+}
+
+type transferEvent struct {
+	Ev         string          `json:"ev"`
+	Sid        json.RawMessage `json:"sid"`
+	Tid        json.RawMessage `json:"tid"`
+	Bytes      int64           `json:"bytes"`
+	Total      int64           `json:"total"`
+	Files      int             `json:"files"`
+	FilesTotal int             `json:"filesTotal"`
+	Current    string          `json:"current"`
+}
+
+type transferDoneEvent struct {
+	Ev    string          `json:"ev"`
+	Sid   json.RawMessage `json:"sid"`
+	Tid   json.RawMessage `json:"tid"`
+	Ok    bool            `json:"ok"`
+	Error *sftpError      `json:"error,omitempty"`
+}
+
+func failedEventFor(id opaqueID, f *failure) failedEvent {
 	return failedEvent{
 		Ev:             "failed",
 		Sid:            id.raw,
@@ -255,7 +338,7 @@ func failedEventFor(id sessionID, f *failure) failedEvent {
 	}
 }
 
-func closedEventFor(id sessionID, reason string, exitStatus *int) closedEvent {
+func closedEventFor(id opaqueID, reason string, exitStatus *int) closedEvent {
 	return closedEvent{Ev: "closed", Sid: id.raw, Reason: reason, ExitStatus: exitStatus}
 }
 

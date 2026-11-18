@@ -23,7 +23,12 @@ const PATHS = {
   server: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   upload: 'M12 15V4M7 9l5-5 5 5M5 20h14',
-  lock: 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3'
+  lock: 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3',
+  up: 'M12 19V5M5 12l7-7 7 7',
+  file: 'M6 3h8l4 4v14H6zM14 3v4h4',
+  link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
+  arrowRight: 'M5 12h14M13 6l6 6-6 6',
+  arrowLeft: 'M19 12H5M11 6l-6 6 6 6'
 } as const
 
 export type IconName = keyof typeof PATHS

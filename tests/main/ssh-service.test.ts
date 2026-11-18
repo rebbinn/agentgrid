@@ -4,6 +4,7 @@ import { SshService, type SecretAccess } from '../../src/main/ssh-service'
 import { TerminalService } from '../../src/main/terminal-service'
 import type { TerminalDataEvent, TerminalExitEvent } from '../../src/shared/ipc'
 import type { Host } from '../../src/shared/hosts'
+import type { SftpEvent } from '../../src/shared/sftp'
 import type { SshEvent } from '../../src/shared/ssh'
 
 const PANE = '11111111-1111-4111-8111-111111111111'
@@ -64,6 +65,7 @@ let helper: FakeHelper
 let hosts: Map<string, Host>
 let secrets: Map<string, string>
 let events: SshEvent[]
+let sftpEvents: SftpEvent[]
 let data: TerminalDataEvent[]
 let exits: TerminalExitEvent[]
 let touched: Array<[string, number]>
@@ -80,6 +82,7 @@ beforeEach(() => {
   hosts = new Map([[TARGET, host()]])
   secrets = new Map([[`${TARGET}:password`, 'stored-pass']])
   events = []
+  sftpEvents = []
   data = []
   exits = []
   touched = []
@@ -113,6 +116,7 @@ beforeEach(() => {
     },
     secrets: secretAccess,
     emitEvent: (event) => events.push(event),
+    emitSftpEvent: (event) => sftpEvents.push(event),
     now: () => 777
   })
 })
@@ -311,5 +315,134 @@ describe('testing a connection from the editor', () => {
     void service.test({ sessionId: PANE, host: host() })
     await settle()
     expect(helper.last('connect')?.target.password).toBe('stored-pass')
+  })
+})
+
+describe('SFTP sessions', () => {
+  const SFTP = '77777777-7777-4777-8777-777777777777'
+  const TRANSFER = '88888888-8888-4888-8888-888888888888'
+
+  async function connectedShell(): Promise<void> {
+    const result = service.open({ id: PANE, hostId: TARGET, cols: 80, rows: 24 })
+    await settle()
+    helper.emit({ ev: 'connected', sid: PANE })
+    await result
+  }
+
+  async function readySftp(): Promise<void> {
+    const opened = service.openSftp({ id: SFTP, hostId: TARGET })
+    await settle()
+    helper.emit({ ev: 'sftp-ready', sid: SFTP, home: '/home/deploy' })
+    await opened
+  }
+
+  it('reuses the connection of a running terminal instead of logging in again', async () => {
+    await connectedShell()
+    const opened = service.openSftp({ id: SFTP, hostId: TARGET, viaId: PANE })
+    await settle()
+    expect(helper.last('sftp-open')).toEqual({ op: 'sftp-open', sid: SFTP, via: PANE })
+    helper.emit({ ev: 'sftp-ready', sid: SFTP, home: '/home/deploy' })
+    await expect(opened).resolves.toEqual({ ok: true, home: '/home/deploy' })
+  })
+
+  it('opens its own connection with the stored password when no terminal is running', async () => {
+    const opened = service.openSftp({ id: SFTP, hostId: TARGET, viaId: PANE })
+    await settle()
+    expect(helper.last('sftp-open')).toMatchObject({ sid: SFTP, target: { password: 'stored-pass' }, jump: null })
+    helper.emit({ ev: 'failed', sid: SFTP, kind: 'refused', message: 'no', host: TARGET })
+    await expect(opened).resolves.toMatchObject({ ok: false, failure: { code: 'refused' } })
+  })
+
+  it('maps requests to helper commands and keeps only valid entries', async () => {
+    await readySftp()
+    const listed = service.sftpRequest({ sessionId: SFTP, op: 'list', path: '/var' })
+    const command = helper.last('sftp-list')!
+    expect(command).toMatchObject({ sid: SFTP, path: '/var' })
+    helper.emit({
+      ev: 'sftp-reply',
+      sid: SFTP,
+      rid: command.rid,
+      ok: true,
+      path: '/var',
+      entries: [
+        { name: 'log', kind: 'dir', size: 0, mtime: 1, mode: 493 },
+        { name: '', kind: 'file', size: 1, mtime: 1, mode: 420 }
+      ]
+    })
+    await expect(listed).resolves.toEqual({
+      ok: true,
+      path: '/var',
+      entries: [{ name: 'log', kind: 'dir', size: 0, mtime: 1, mode: 493 }]
+    })
+
+    const removed = service.sftpRequest({ sessionId: SFTP, op: 'remove', path: '/var/x', recursive: true })
+    const remove = helper.last('sftp-remove')!
+    expect(remove).toMatchObject({ path: '/var/x', recursive: true })
+    helper.emit({ ev: 'sftp-reply', sid: SFTP, rid: remove.rid, ok: false, error: { code: 'permission', message: 'denied' } })
+    await expect(removed).resolves.toEqual({ ok: false, error: { code: 'permission', message: 'denied' } })
+  })
+
+  it('gives up on a request the helper never answers', async () => {
+    await readySftp()
+    const pending = service.sftpRequest({ sessionId: SFTP, op: 'realpath', path: '.' })
+    await vi.advanceTimersByTimeAsync(60_000)
+    await expect(pending).resolves.toMatchObject({ ok: false, error: { code: 'connection' } })
+  })
+
+  it('forwards transfer progress and the result to the renderer', async () => {
+    await readySftp()
+    service.transfer({
+      sessionId: SFTP,
+      transferId: TRANSFER,
+      direction: 'download',
+      localPath: 'C:\\Users\\me\\Downloads\\app.log',
+      remotePath: '/var/log/app.log',
+      overwrite: false
+    })
+    expect(helper.last('sftp-download')).toEqual({
+      op: 'sftp-download',
+      sid: SFTP,
+      tid: TRANSFER,
+      localPath: 'C:\\Users\\me\\Downloads\\app.log',
+      remotePath: '/var/log/app.log',
+      overwrite: false
+    })
+    helper.emit({ ev: 'transfer', sid: SFTP, tid: TRANSFER, bytes: 10, total: 100, files: 0, filesTotal: 1, current: 'app.log' })
+    helper.emit({ ev: 'transfer', sid: SFTP, tid: 'unknown', bytes: 1, total: 1, files: 0, filesTotal: 1, current: '' })
+    helper.emit({ ev: 'transfer-done', sid: SFTP, tid: TRANSFER, ok: false, error: { code: 'exists', message: '' } })
+    expect(sftpEvents).toEqual([
+      {
+        kind: 'transfer',
+        sessionId: SFTP,
+        transferId: TRANSFER,
+        bytes: 10,
+        total: 100,
+        files: 0,
+        filesTotal: 1,
+        current: 'app.log'
+      },
+      { kind: 'transfer-done', sessionId: SFTP, transferId: TRANSFER, error: { code: 'exists', message: '' } }
+    ])
+  })
+
+  it('ends open requests and transfers when the session closes', async () => {
+    await readySftp()
+    const pending = service.sftpRequest({ sessionId: SFTP, op: 'list', path: '/' })
+    service.transfer({
+      sessionId: SFTP,
+      transferId: TRANSFER,
+      direction: 'upload',
+      localPath: 'C:\\a.txt',
+      remotePath: '/tmp/a.txt',
+      overwrite: true
+    })
+    service.closeSftp(SFTP)
+    expect(helper.last('sftp-close')).toEqual({ op: 'sftp-close', sid: SFTP })
+    helper.emit({ ev: 'closed', sid: SFTP, reason: 'closed' })
+    await expect(pending).resolves.toMatchObject({ ok: false, error: { code: 'connection' } })
+    expect(sftpEvents).toEqual([
+      { kind: 'transfer-done', sessionId: SFTP, transferId: TRANSFER, error: { code: 'cancelled', message: '' } },
+      { kind: 'sftp-closed', sessionId: SFTP, reason: 'closed' }
+    ])
   })
 })

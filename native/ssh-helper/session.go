@@ -25,10 +25,11 @@ var (
 
 type session struct {
 	helper *helper
-	id     sessionID
+	id     opaqueID
 	mode   string
 	target hostSpec
 	jump   *hostSpec
+	via    *session
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -36,13 +37,18 @@ type session struct {
 	output *flowGate
 	inbox  *shellInbox
 
-	mu         sync.Mutex
-	cols       int
-	rows       int
-	ptyClaimed bool
-	lastRid    int
-	pending    map[string]*pendingQuestion
-	closers    []io.Closer
+	mu           sync.Mutex
+	cols         int
+	rows         int
+	ptyClaimed   bool
+	lastRid      int
+	pending      map[string]*pendingQuestion
+	closers      []io.Closer
+	sharedClient *ssh.Client
+	files        *sftpSession
+
+	finalMu   sync.RWMutex
+	finalSent bool
 
 	keepaliveLost atomic.Bool
 }
@@ -66,13 +72,12 @@ type questionReply struct {
 	cancel  bool
 }
 
-func newSession(h *helper, id sessionID, cmd *command) *session {
+func newSession(h *helper, id opaqueID, mode string, target, jump *hostSpec) *session {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &session{
 		helper:  h,
 		id:      id,
-		mode:    cmd.Mode,
-		target:  *cmd.Target,
+		mode:    mode,
 		ctx:     ctx,
 		cancel:  cancel,
 		output:  newFlowGate(),
@@ -81,12 +86,12 @@ func newSession(h *helper, id sessionID, cmd *command) *session {
 		rows:    defaultRows,
 		pending: make(map[string]*pendingQuestion),
 	}
-	if cmd.Jump != nil {
-		jump := *cmd.Jump
-		s.jump = &jump
+	if target != nil {
+		s.target = *target
 	}
-	if cmd.Cols > 0 && cmd.Rows > 0 {
-		s.cols, s.rows = cmd.Cols, cmd.Rows
+	if jump != nil {
+		jumpCopy := *jump
+		s.jump = &jumpCopy
 	}
 	return s
 }
@@ -112,6 +117,9 @@ func (s *session) runUntilFinalEvent() (finalEvent any) {
 		}
 	}()
 
+	if s.mode == modeSftp {
+		return s.serveFiles(func() { connected = true })
+	}
 	client, f := s.establish()
 	if f != nil {
 		return failedEventFor(s.id, f)
@@ -122,6 +130,42 @@ func (s *session) runUntilFinalEvent() (finalEvent any) {
 		return closedEventFor(s.id, reasonClosed, nil)
 	}
 	return s.serveShell(client, func() { connected = true })
+}
+
+func (s *session) emitFinal(event any) {
+	s.finalMu.Lock()
+	defer s.finalMu.Unlock()
+	s.finalSent = true
+	s.emit(event)
+}
+
+func (s *session) emitUnlessFinished(event any) {
+	s.finalMu.RLock()
+	defer s.finalMu.RUnlock()
+	if !s.finalSent {
+		s.emit(event)
+	}
+}
+
+func (s *session) connectedShellClient() *ssh.Client {
+	if s.mode != modeShell {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sharedClient
+}
+
+func (s *session) shareClient(client *ssh.Client) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sharedClient = client
+}
+
+func (s *session) readyFiles() *sftpSession {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.files
 }
 
 func (s *session) establish() (*ssh.Client, *failure) {
@@ -163,6 +207,8 @@ func (s *session) serveShell(client *ssh.Client, markConnected func()) any {
 	}
 
 	markConnected()
+	s.shareClient(client)
+	defer s.shareClient(nil)
 	s.emit(connectedEvent{Ev: "connected", Sid: s.id.raw})
 
 	shellCtx, stopShell := context.WithCancel(s.ctx)
@@ -251,6 +297,10 @@ func (s *session) emitPhase(phase, host string) {
 }
 
 func (s *session) requestClose() {
+	if files := s.readyFiles(); files != nil {
+		files.requestStop()
+		return
+	}
 	s.cancel()
 }
 
@@ -330,7 +380,7 @@ func (s *session) ask(kind questionKind, questionCount int, watchdog *handshakeW
 }
 
 func (s *session) deliverAnswer(cmd *command) {
-	rid, ok := parseRequestID(cmd.Rid)
+	rid, ok := parseQuestionID(cmd.Rid)
 	if !ok {
 		return
 	}

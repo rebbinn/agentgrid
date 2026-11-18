@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import {
   AgentStatusSchema,
   AppInfoSchema,
@@ -20,6 +20,14 @@ import {
   KeyPickResultSchema
 } from '../shared/hosts'
 import { LoadedSettingsSchema } from '../shared/settings'
+import {
+  LocalListResultSchema,
+  LocalPickResultSchema,
+  LocalPlacesSchema,
+  SftpEventSchema,
+  SftpOpenResultSchema,
+  SftpReplySchema
+} from '../shared/sftp'
 import { SshEventSchema, SshResultSchema } from '../shared/ssh'
 
 function subscribe<T>(
@@ -103,6 +111,24 @@ const api: AgentGridApi = {
     answer: (answer) => ipcRenderer.send(IpcChannel.sshAnswer, answer),
     cancel: (sessionId) => ipcRenderer.send(IpcChannel.sshCancel, { sessionId }),
     onEvent: (listener) => subscribe(IpcChannel.sshEvent, (payload) => SshEventSchema.parse(payload), listener)
+  },
+  sftp: {
+    open: async (request) => SftpOpenResultSchema.parse(await ipcRenderer.invoke(IpcChannel.sftpOpen, request)),
+    request: async (request) => SftpReplySchema.parse(await ipcRenderer.invoke(IpcChannel.sftpRequest, request)),
+    transfer: (request) => ipcRenderer.send(IpcChannel.sftpTransfer, request),
+    cancelTransfer: (sessionId, transferId) =>
+      ipcRenderer.send(IpcChannel.sftpCancelTransfer, { sessionId, transferId }),
+    close: (sessionId) => ipcRenderer.send(IpcChannel.sftpClose, { sessionId }),
+    onEvent: (listener) => subscribe(IpcChannel.sftpEvent, (payload) => SftpEventSchema.parse(payload), listener)
+  },
+  local: {
+    list: async (path) => LocalListResultSchema.parse(await ipcRenderer.invoke(IpcChannel.localList, { path })),
+    places: async () => LocalPlacesSchema.parse(await ipcRenderer.invoke(IpcChannel.localPlaces)),
+    pickFiles: async () => LocalPickResultSchema.parse(await ipcRenderer.invoke(IpcChannel.localPickFiles)),
+    reveal: async (path) => {
+      await ipcRenderer.invoke(IpcChannel.localReveal, { path })
+    },
+    pathForFile: (file) => webUtils.getPathForFile(file)
   }
 }
 

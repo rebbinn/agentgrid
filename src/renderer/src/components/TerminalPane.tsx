@@ -15,7 +15,7 @@ import { folderName } from '../lib/path'
 import { withShortcut } from '../lib/shortcuts'
 import { useHostsStore } from '../state/hosts-store'
 import { useSshStore } from '../state/ssh-store'
-import { useTerminalStore, MAX_TITLE_LENGTH, type Pane } from '../state/terminal-store'
+import { remoteHostId, useTerminalStore, MAX_TITLE_LENGTH, type Pane } from '../state/terminal-store'
 import { useUiStore } from '../state/ui-store'
 import { strings } from '../strings'
 import { terminalRegistry } from '../terminal/registry'
@@ -23,6 +23,7 @@ import { MAX_FONT_SIZE, MIN_FONT_SIZE } from '../terminal/theme'
 import { Dropdown, type DropdownItem } from './Dropdown'
 import { EnvironmentBadge } from './EnvironmentBadge'
 import { Icon } from './Icon'
+import { SftpView } from './SftpView'
 import { SshPaneOverlay, sshFooterText } from './SshPaneOverlay'
 import { TerminalView } from './TerminalView'
 
@@ -55,11 +56,13 @@ function TerminalPaneComponent({
   hidden
 }: TerminalPaneProps) {
   const closePane = useClosePane()
+  const hostId = remoteHostId(pane)
   const host = useHostsStore((state) =>
-    pane.sshHostId ? state.views.find((view) => view.host.id === pane.sshHostId)?.host : undefined
+    hostId ? state.views.find((view) => view.host.id === hostId)?.host : undefined
   )
   const latency = useSshStore((state) => state.latency[pane.id])
-  const isSsh = pane.sshHostId !== undefined
+  const isSsh = hostId !== undefined
+  const isSftp = pane.sftpHostId !== undefined
   const [renaming, setRenaming] = useState(false)
   const [dropTarget, setDropTarget] = useState(false)
 
@@ -133,9 +136,24 @@ function TerminalPaneComponent({
     store().swapPanes(draggedId, pane.id)
   }
 
-  const menuItems: DropdownItem[] = [
+  const sftpMenu: DropdownItem[] = [
+    { id: 'rename', label: strings.pane.rename, onSelect: startRename },
+    { id: 'restart', label: strings.ssh.reconnect, onSelect: restart },
+    {
+      id: 'earlier',
+      label: strings.pane.moveEarlier,
+      separatorBefore: true,
+      onSelect: () => store().movePane(pane.id, -1)
+    },
+    { id: 'later', label: strings.pane.moveLater, onSelect: () => store().movePane(pane.id, 1) }
+  ]
+
+  const terminalMenu: DropdownItem[] = [
     { id: 'rename', label: strings.pane.rename, onSelect: startRename },
     { id: 'restart', label: isSsh ? strings.ssh.reconnect : strings.terminal.restart, onSelect: restart },
+    ...(isSsh && host
+      ? [{ id: 'sftp', label: strings.sftp.openFromPane, onSelect: () => store().launchSftp(host.id, pane.id) }]
+      : []),
     {
       id: 'clear',
       label: strings.terminal.clear,
@@ -190,6 +208,7 @@ function TerminalPaneComponent({
       data-status={pane.status}
       data-drop-target={dropTarget}
       data-env={host?.environment ?? undefined}
+      data-kind={isSftp ? 'sftp' : undefined}
       style={
         hidden
           ? { display: 'none' }
@@ -238,7 +257,7 @@ function TerminalPaneComponent({
         )}
         {isSsh ? (
           <>
-            <span className="pane__badge">{strings.ssh.badge}</span>
+            <span className="pane__badge">{isSftp ? strings.sftp.badge : strings.ssh.badge}</span>
             {host && (
               <span className="pane__meta" title={host.note || endpointLabel(host)}>
                 {endpointLabel(host)}
@@ -252,8 +271,20 @@ function TerminalPaneComponent({
           </span>
         )}
         <span className="pane__spacer" />
-        {isSsh && pane.status === 'running' && latency !== undefined && (
+        {isSsh && !isSftp && pane.status === 'running' && latency !== undefined && (
           <span className="pane__latency">{strings.ssh.latency(latency)}</span>
+        )}
+        {isSsh && !isSftp && host && pane.status === 'running' && (
+          <button
+            type="button"
+            className="pane__action"
+            aria-label={strings.sftp.openFromPane}
+            title={strings.sftp.openFromPane}
+            onClick={() => store().launchSftp(host.id, pane.id)}
+          >
+            <Icon name="folder" size={13} />
+            {strings.sftp.badge}
+          </button>
         )}
         <button
           type="button"
@@ -264,7 +295,7 @@ function TerminalPaneComponent({
         >
           <Icon name={focusMode ? 'restore' : 'maximize'} size={14} />
         </button>
-        <Dropdown label={strings.pane.menu} items={menuItems} buttonClassName="icon-button">
+        <Dropdown label={strings.pane.menu} items={isSftp ? sftpMenu : terminalMenu} buttonClassName="icon-button">
           <Icon name="more" size={14} />
         </Dropdown>
         <button
@@ -279,7 +310,11 @@ function TerminalPaneComponent({
       </header>
 
       <div className="pane__body">
-        <TerminalView id={pane.id} active={active && !renaming} />
+        {isSftp ? (
+          pane.status === 'running' && <SftpView paneId={pane.id} host={host} />
+        ) : (
+          <TerminalView id={pane.id} active={active && !renaming} />
+        )}
 
         {isSsh && <SshPaneOverlay pane={pane} host={host} onClose={() => closePane(pane.id)} />}
 
@@ -327,7 +362,15 @@ function TerminalPaneComponent({
 
       {pane.status === 'exited' && (
         <footer className="pane__footer">
-          <span>{isSsh ? sshFooterText(pane) : strings.terminal.exitedBar(pane.exitCode ?? 0)}</span>
+          <span>
+            {isSftp
+              ? pane.exitReason === 'lost'
+                ? strings.sftp.lostBar
+                : strings.sftp.closedBar
+              : isSsh
+                ? sshFooterText(pane)
+                : strings.terminal.exitedBar(pane.exitCode ?? 0)}
+          </span>
           <button type="button" className="btn" onClick={restart}>
             <Icon name="restart" />
             {isSsh ? strings.ssh.reconnect : strings.terminal.restart}

@@ -9,6 +9,7 @@ import { listClaudeSessions } from './claude-sessions'
 import { findOnPath } from './executables'
 import { HostsService } from './hosts-service'
 import { HostsStore } from './hosts-store'
+import { listDrives, listLocalDirectory } from './local-files'
 import { registerIpc } from './ipc'
 import { buildJumpList } from './jump-list'
 import { parseLaunchArgs } from './launch-args'
@@ -191,6 +192,7 @@ const sshService = new SshService({
   hosts: hostsStore,
   secrets: secretStore,
   emitEvent: (event) => sendToWindow(IpcChannel.sshEvent, event),
+  emitSftpEvent: (event) => sendToWindow(IpcChannel.sftpEvent, event),
   now: () => Date.now()
 })
 
@@ -388,6 +390,21 @@ if (!hasLock) {
       terminals,
       hosts: hostsService,
       ssh: sshService,
+      local: {
+        list: listLocalDirectory,
+        places: () => ({
+          home: app.getPath('home'),
+          downloads: app.getPath('downloads'),
+          drives: listDrives()
+        }),
+        pickFiles: () =>
+          parentWindowFor(async (window) => {
+            const options = { properties: ['openFile' as const, 'multiSelections' as const] }
+            const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
+            return { paths: result.canceled ? [] : result.filePaths }
+          }),
+        reveal: (path) => shell.showItemInFolder(path)
+      },
       getShells,
       listSessions,
       agentStatus: () => ({

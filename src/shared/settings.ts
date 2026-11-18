@@ -31,6 +31,7 @@ export const SavedPaneSchema = z
     startupCommand: CommandLineSchema.optional(),
     commandKind: z.enum(PRESET_KINDS).optional(),
     sshHostId: z.uuid().optional(),
+    sftpHostId: z.uuid().optional(),
     fontSize: z.number().int().min(9).max(28)
   })
   .refine((pane) => pane.resumeSessionId === undefined || pane.agentId === 'claude')
@@ -38,6 +39,7 @@ export const SavedPaneSchema = z
   .refine(
     (pane) => pane.sshHostId === undefined || (pane.agentId === undefined && pane.startupCommand === undefined)
   )
+  .refine((pane) => pane.sftpHostId === undefined || (pane.sshHostId === undefined && pane.agentId === undefined))
 export type SavedPane = z.infer<typeof SavedPaneSchema>
 
 export const PresetSchema = z

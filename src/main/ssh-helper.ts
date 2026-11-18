@@ -12,6 +12,15 @@ export interface HostSpec {
   passphrase?: string
 }
 
+interface TransferCommand<Op extends string> {
+  op: Op
+  sid: string
+  tid: string
+  localPath: string
+  remotePath: string
+  overwrite: boolean
+}
+
 export type HelperCommand =
   | {
       op: 'connect'
@@ -28,9 +37,21 @@ export type HelperCommand =
   | { op: 'resume'; sid: string }
   | { op: 'answer'; sid: string; rid: string; accept?: boolean; answers?: string[]; cancel?: boolean }
   | { op: 'close'; sid: string }
+  | { op: 'sftp-open'; sid: string; via?: string; target?: HostSpec; jump?: HostSpec | null }
+  | { op: 'sftp-close'; sid: string }
+  | { op: 'sftp-list'; sid: string; rid: string; path: string }
+  | { op: 'sftp-realpath'; sid: string; rid: string; path: string }
+  | { op: 'sftp-mkdir'; sid: string; rid: string; path: string }
+  | { op: 'sftp-rename'; sid: string; rid: string; from: string; to: string }
+  | { op: 'sftp-remove'; sid: string; rid: string; path: string; recursive: boolean }
+  | { op: 'sftp-chmod'; sid: string; rid: string; path: string; mode: number }
+  | TransferCommand<'sftp-upload'>
+  | TransferCommand<'sftp-download'>
+  | { op: 'transfer-cancel'; sid: string; tid: string }
 
 const Sid = z.string().min(1).max(100)
 const Text = z.string().max(4000)
+const ErrorSchema = z.object({ code: z.string().max(100), message: Text.optional().default('') })
 
 export const HelperEventSchema = z.discriminatedUnion('ev', [
   z.object({ ev: z.literal('ready'), version: z.number() }),
@@ -71,7 +92,28 @@ export const HelperEventSchema = z.discriminatedUnion('ev', [
     sid: Sid,
     reason: z.enum(['exit', 'lost', 'closed']),
     exitStatus: z.number().int().optional()
-  })
+  }),
+  z.object({ ev: z.literal('sftp-ready'), sid: Sid, home: z.string().max(4096) }),
+  z.object({
+    ev: z.literal('sftp-reply'),
+    sid: Sid,
+    rid: Sid,
+    ok: z.boolean(),
+    path: z.string().max(4096).optional(),
+    entries: z.array(z.unknown()).optional(),
+    error: ErrorSchema.optional()
+  }),
+  z.object({
+    ev: z.literal('transfer'),
+    sid: Sid,
+    tid: Sid,
+    bytes: z.number().nonnegative(),
+    total: z.number().nonnegative(),
+    files: z.number().int().nonnegative(),
+    filesTotal: z.number().int().nonnegative(),
+    current: z.string().max(4096).optional().default('')
+  }),
+  z.object({ ev: z.literal('transfer-done'), sid: Sid, tid: Sid, ok: z.boolean(), error: ErrorSchema.optional() })
 ])
 export type HelperEvent = z.infer<typeof HelperEventSchema>
 

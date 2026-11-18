@@ -4,6 +4,7 @@ import { getAppInfo } from '../lib/app-info'
 import { resolveGrid } from '../lib/layout'
 import { useLayoutStore } from '../state/layout-store'
 import { useProjectStore } from '../state/project-store'
+import { useSftpStore } from '../state/sftp-store'
 import { useTerminalStore } from '../state/terminal-store'
 import { strings } from '../strings'
 
@@ -14,8 +15,8 @@ export function StatusBar() {
     (state) => state.panes.find((pane) => pane.id === state.activePaneId)?.title ?? null
   )
   const sshConnected = useTerminalStore(
-    (state) => state.panes.filter((pane) => pane.sshHostId && pane.status === 'running').length
-  )
+    (state) => state.panes.filter((pane) => pane.sshHostId && pane.status === 'running').length  )
+  const activeTransfers = useSftpStore((state) => state.transfers.filter((item) => item.state === 'running').length)
   const preset = useLayoutStore((state) => state.preset)
   const focusMode = useLayoutStore((state) => state.focusMode)
   const [info, setInfo] = useState<AppInfo | null>(null)
@@ -46,6 +47,9 @@ export function StatusBar() {
       )}
       <span className="statusbar__spacer" />
       {sshConnected > 0 && <span className="statusbar__item">{strings.ssh.statusConnected(sshConnected)}</span>}
+      {activeTransfers > 0 && (
+        <span className="statusbar__item">{strings.sftp.transfers.status(activeTransfers)}</span>
+      )}
       {activeTitle && <span className="statusbar__item">{strings.status.active(activeTitle)}</span>}
       {paneCount > 0 && (
         <span className="statusbar__item">

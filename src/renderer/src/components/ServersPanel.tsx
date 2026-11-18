@@ -39,6 +39,18 @@ export function openHostTerminal(hostId: string): void {
   useTerminalStore.getState().launchSsh(hostId)
 }
 
+export function openHostSftp(hostId: string): void {
+  const store = useTerminalStore.getState()
+  const running = store.panes.find((pane) => pane.sshHostId === hostId && pane.status === 'running')
+  store.launchSftp(hostId, running?.id)
+}
+
+export function openHostSideBySide(hostId: string): void {
+  const store = useTerminalStore.getState()
+  const terminalId = store.launchSsh(hostId)
+  if (terminalId) store.launchSftp(hostId, terminalId)
+}
+
 export function ServersPanel() {
   const views = useHostsStore((state) => state.views)
   const status = useHostsStore((state) => state.status)
@@ -102,6 +114,8 @@ export function ServersPanel() {
       hint: 'Enter',
       onSelect: () => openHostTerminal(view.host.id)
     },
+    { id: 'sftp', label: strings.sftp.open, onSelect: () => openHostSftp(view.host.id) },
+    { id: 'side-by-side', label: strings.sftp.openSideBySide, onSelect: () => openHostSideBySide(view.host.id) },
     {
       id: 'edit',
       label: texts.edit,
@@ -275,6 +289,15 @@ export function ServersPanel() {
                               {texts.jumpVia(nameById.get(host.jumpHostId) ?? '?')}
                             </span>
                           )}
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button server-row__action"
+                          aria-label={strings.sftp.openFor(host.name)}
+                          title={strings.sftp.open}
+                          onClick={() => openHostSftp(host.id)}
+                        >
+                          <Icon name="folder" size={14} />
                         </button>
                         <button
                           type="button"

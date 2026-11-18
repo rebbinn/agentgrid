@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
@@ -26,6 +27,7 @@ type serverOptions struct {
 	directTCPIP         bool
 	keepaliveReplies    int
 	extraHostKeys       []ssh.Signer
+	files               *virtualFS
 }
 
 type ptyRequest struct {
@@ -239,6 +241,19 @@ func (srv *testServer) serveSession(newChannel ssh.NewChannel) {
 		case "shell":
 			request.Reply(true, nil)
 			go srv.runFakeShell(channel)
+		case "subsystem":
+			var payload struct{ Name string }
+			ssh.Unmarshal(request.Payload, &payload)
+			if payload.Name != "sftp" || srv.opts.files == nil {
+				request.Reply(false, nil)
+				continue
+			}
+			request.Reply(true, nil)
+			go func() {
+				server := sftp.NewRequestServer(channel, srv.opts.files.handlers(), sftp.WithStartDirectory(testHome))
+				server.Serve()
+				channel.Close()
+			}()
 		default:
 			if request.WantReply {
 				request.Reply(false, nil)

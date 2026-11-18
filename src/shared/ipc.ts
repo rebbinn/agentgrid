@@ -2,6 +2,17 @@ import { z } from 'zod'
 import { AGENT_IDS } from './agents'
 import type { HostSaveRequest, HostSaveResult, HostView, HostsTransferResult, KeyPickResult } from './hosts'
 import { CommandLineSchema, type AppState, type LoadedSettings } from './settings'
+import type {
+  LocalListResult,
+  LocalPickResult,
+  LocalPlaces,
+  SftpEvent,
+  SftpOpenRequest,
+  SftpOpenResult,
+  SftpReply,
+  SftpRequest,
+  TransferRequest
+} from './sftp'
 import type { SshAnswer, SshEvent, SshOpenRequest, SshResult, SshTestRequest } from './ssh'
 
 export const IpcChannel = {
@@ -37,7 +48,17 @@ export const IpcChannel = {
   sshTest: 'ssh:test',
   sshAnswer: 'ssh:answer',
   sshCancel: 'ssh:cancel',
-  sshEvent: 'ssh:event'
+  sshEvent: 'ssh:event',
+  sftpOpen: 'sftp:open',
+  sftpRequest: 'sftp:request',
+  sftpTransfer: 'sftp:transfer',
+  sftpCancelTransfer: 'sftp:cancel-transfer',
+  sftpClose: 'sftp:close',
+  sftpEvent: 'sftp:event',
+  localList: 'local:list',
+  localPlaces: 'local:places',
+  localPickFiles: 'local:pick-files',
+  localReveal: 'local:reveal'
 } as const
 
 export type IpcChannelName = (typeof IpcChannel)[keyof typeof IpcChannel]
@@ -234,5 +255,20 @@ export interface AgentGridApi {
     answer(answer: SshAnswer): void
     cancel(sessionId: string): void
     onEvent(listener: (event: SshEvent) => void): () => void
+  }
+  sftp: {
+    open(request: SftpOpenRequest): Promise<SftpOpenResult>
+    request(request: SftpRequest): Promise<SftpReply>
+    transfer(request: TransferRequest): void
+    cancelTransfer(sessionId: string, transferId: string): void
+    close(sessionId: string): void
+    onEvent(listener: (event: SftpEvent) => void): () => void
+  }
+  local: {
+    list(path: string): Promise<LocalListResult>
+    places(): Promise<LocalPlaces>
+    pickFiles(): Promise<LocalPickResult>
+    reveal(path: string): Promise<void>
+    pathForFile(file: File): string
   }
 }

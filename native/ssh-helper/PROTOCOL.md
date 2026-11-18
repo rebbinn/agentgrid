@@ -66,6 +66,55 @@ Malformed line: write a diagnostic to stderr, ignore it, keep running.
 
 After `failed` or `closed` the `sid` is forgotten; later commands for it are ignored.
 
+## SFTP
+
+An SFTP session has its own `sid`, chosen by Electron like any other.
+
+### Opening and closing
+
+| op | fields | meaning |
+| --- | --- | --- |
+| `sftp-open` | `sid`, and either `via` (the `sid` of a `shell` session that is `connected`) or `target` + `jump` (host specs, as in `connect`) | Start an SFTP subsystem. With `via` it runs on that session's SSH connection: no new login. Without `via` it makes its own connection with the same phases, host key checks and prompts as `connect`. |
+| `sftp-close` | `sid` | Close the SFTP subsystem (and its own connection, never the `via` one). |
+
+Events: `phase`, `hostkey`, `prompt` (own connection only), then `sftp-ready` `{ sid, home }` where `home` is the absolute path of the login directory, or `failed` (same kinds as `connect`; unknown or not connected `via` → kind `other`).
+After `sftp-ready` the session ends with `closed` (`closed` after `sftp-close`, `lost` when its connection drops, including when the `via` session ends).
+
+### Requests
+
+Every request carries `sid` and `rid` and gets exactly one `sftp-reply`: `{ "ev": "sftp-reply", "sid", "rid", "ok": true, ...result }` or `{ "ev": "sftp-reply", "sid", "rid", "ok": false, "error": { "code", "message" } }`.
+Error codes: `not-found`, `permission`, `exists`, `not-empty`, `connection`, `failure`. Remote paths are POSIX paths; relative paths are resolved against `home`.
+
+| op | fields | result |
+| --- | --- | --- |
+| `sftp-list` | `path` | `path` (absolute, cleaned), `entries`: `[{ name, kind: "file"/"dir"/"link"/"other", size, mtime (Unix ms), mode (permission bits, e.g. 420 for 0644), target?, targetKind? }]` without `.` and `..`. For a link, `target` is the link text and `targetKind` the kind of what it points to (`file`, `dir`, `other`; missing when the target cannot be read). |
+| `sftp-realpath` | `path` | `path` |
+| `sftp-mkdir` | `path` | — (`exists` when it is already there) |
+| `sftp-rename` | `from`, `to` | — (`exists` when `to` is taken; never overwrites) |
+| `sftp-remove` | `path`, `recursive` (bool) | — (a directory without `recursive` must be empty, else `not-empty`; links are removed, never followed) |
+| `sftp-chmod` | `path`, `mode` (permission bits) | — |
+
+Requests and transfers of one session may run at the same time. Replies may come in any order.
+
+### Transfers
+
+| op | fields | meaning |
+| --- | --- | --- |
+| `sftp-upload` | `sid`, `tid`, `localPath` (Windows path of a file or folder), `remotePath` (full destination path), `overwrite` (bool) | Copy to the server. A folder is copied with everything inside; `remotePath` is then the folder to create. |
+| `sftp-download` | `sid`, `tid`, `remotePath`, `localPath` (full destination path), `overwrite` (bool) | Copy from the server, same rules. |
+| `transfer-cancel` | `sid`, `tid` | Stop a transfer. |
+
+Events:
+- `transfer` `{ sid, tid, bytes, total, files, filesTotal, current }`: progress, at most every 250 ms, plus one right before `transfer-done`. `total` and `filesTotal` are known before the first byte moves (folders are walked first). `current` is the path of the file being copied, relative to the transfer's root.
+- `transfer-done` `{ sid, tid, ok: true }` or `{ sid, tid, ok: false, error: { code, message } }`; extra error code `cancelled`. Without `overwrite`, an existing destination file fails the transfer with `exists` before anything is written.
+
+Rules:
+- Each file is written to `<name>.agentgrid-part` next to its destination and renamed into place only when complete; a cancelled or failed transfer removes its part file. Nothing half-written ever has the real name.
+- Modification times are copied to the destination.
+- Links inside a folder are not followed (no loops); a link to a file is copied as that file, a link to a folder is skipped.
+- Use concurrent reads and writes (pkg/sftp `UseConcurrentReads`, `UseConcurrentWrites`, up to 64 requests per file) so large files move at network speed.
+- Closing the session cancels its transfers (each gets `transfer-done` with `cancelled`).
+
 ## Behaviour
 
 - TCP connect timeout 15 s. Waiting for `answer` has no timeout (the user may be away); `close` cancels it.

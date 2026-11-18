@@ -23,6 +23,7 @@ export function sshFooterText(pane: Pane): string {
 function ConnectPrompt({ pane, host, onClose }: SshPaneOverlayProps & { host: Host }) {
   const connect = (): void => void useTerminalStore.getState().restart(pane.id)
   const isProd = host.environment === 'prod'
+  const savedTitle = pane.sftpHostId ? strings.sftp.savedTitle : strings.ssh.savedTitle
   const connectRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -42,14 +43,18 @@ function ConnectPrompt({ pane, host, onClose }: SshPaneOverlayProps & { host: Ho
       className="pane__overlay"
       data-tone={isProd ? 'danger' : undefined}
       role="group"
-      aria-label={isProd ? strings.ssh.prodTitle : strings.ssh.savedTitle}
+      aria-label={isProd ? strings.ssh.prodTitle : savedTitle}
       onKeyDown={handleKeyDown}
     >
       <h2 className={`pane__overlay-title${isProd ? '' : ' pane__overlay-title--info'}`}>
-        {isProd ? strings.ssh.prodTitle : strings.ssh.savedTitle}
+        {isProd ? strings.ssh.prodTitle : savedTitle}
       </h2>
       <p className="pane__overlay-text">
-        {isProd ? strings.ssh.prodText(host.name, host.group) : strings.ssh.savedText(host.name, endpointLabel(host))}
+        {isProd
+          ? strings.ssh.prodText(host.name, host.group)
+          : pane.sftpHostId
+            ? strings.sftp.savedText(host.name)
+            : strings.ssh.savedText(host.name, endpointLabel(host))}
       </p>
       {isProd && <p className="pane__overlay-text pane__overlay-mono">{endpointLabel(host)}</p>}
       <div className="empty-state__actions">
@@ -84,7 +89,7 @@ function ConnectingView({ pane }: { pane: Pane }) {
   return (
     <div className="pane__overlay" role="status">
       <p className="pane__overlay-text">
-        {phase ? strings.ssh.phase(phase.phase, phase.hostName) : strings.ssh.starting}
+        {phase ? strings.ssh.phase(phase.phase, phase.hostName) : pane.sftpHostId ? strings.sftp.connecting : strings.ssh.starting}
       </p>
       <button type="button" className="btn" onClick={() => window.agentgrid.terminal.kill(pane.id)}>
         {strings.ssh.cancel}

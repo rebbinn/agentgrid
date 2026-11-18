@@ -69,6 +69,7 @@ type helperUnderTest struct {
 	stderr         lockedBuffer
 	finished       chan struct{}
 	secrets        []string
+	sequence       int
 
 	queuesMu sync.Mutex
 	queues   map[string]chan testEvent
@@ -133,8 +134,21 @@ func (h *helperUnderTest) readEvents(stdout io.Reader) {
 			h.t.Errorf("helper wrote a non-JSON line: %q", line)
 			continue
 		}
-		h.queue(sidKey(event["sid"])) <- event
+		h.sequence++
+		event["_seq"] = float64(h.sequence)
+		h.queue(queueKey(event)) <- event
 	}
+}
+
+func queueKey(event testEvent) string {
+	key := sidKey(event["sid"])
+	switch event.str("ev") {
+	case "sftp-reply":
+		return key + "#rid:" + fmt.Sprint(event["rid"])
+	case "transfer", "transfer-done":
+		return key + "#tid:" + fmt.Sprint(event["tid"])
+	}
+	return key
 }
 
 func sidKey(sid any) string {

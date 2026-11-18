@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { findAgent, type AgentId } from '@shared/agents'
 import type { ExitReason, ShellInfo, TerminalErrorCode, TerminalExitEvent } from '@shared/ipc'
 import type { PresetKind, SavedPane } from '@shared/settings'
+import type { SftpOpenResult } from '@shared/sftp'
 import { SSH_PANE_CWD, SSH_SHELL_ID, SSH_SHELL_LABEL, type SshFailure, type SshResult } from '@shared/ssh'
 import { getAppInfo } from '../lib/app-info'
 import { clampFontSize } from '../lib/font-size'
@@ -11,6 +12,8 @@ import { terminalRegistry } from '../terminal/registry'
 import type { HostView } from '@shared/hosts'
 import { findHostView, useHostsStore } from './hosts-store'
 import { useLayoutStore } from './layout-store'
+import { initSftpPane } from './sftp-actions'
+import { useSftpStore } from './sftp-store'
 import { useSshStore } from './ssh-store'
 import { usePrefsStore } from './prefs-store'
 import { useUiStore } from './ui-store'
@@ -34,6 +37,8 @@ export interface Pane {
   startupCommand?: string
   commandKind?: PresetKind
   sshHostId?: string
+  sftpHostId?: string
+  sftpViaId?: string
   sshFailure?: SshFailure
   status: PaneStatus
   exitCode?: number
@@ -59,9 +64,18 @@ export interface ParkedPanes {
 
 export function startsInBulk(pane: Pane, hosts: readonly HostView[] = useHostsStore.getState().views): boolean {
   if (pane.status !== 'idle') return false
-  if (!pane.sshHostId) return true
-  const environment = hosts.find((view) => view.host.id === pane.sshHostId)?.host.environment
+  const hostId = remoteHostId(pane)
+  if (!hostId) return true
+  const environment = hosts.find((view) => view.host.id === hostId)?.host.environment
   return environment !== undefined && environment !== 'prod'
+}
+
+export function remoteHostId(pane: Pane): string | undefined {
+  return pane.sshHostId ?? pane.sftpHostId
+}
+
+export function isSftpPane(pane: Pane): boolean {
+  return pane.sftpHostId !== undefined
 }
 
 export function countRunning(panes: readonly Pane[]): number {
@@ -77,6 +91,8 @@ interface TerminalState {
   discardParked: (workspaceId: string) => void
   launch: (options: LaunchOptions) => Promise<string | null>
   launchSsh: (hostId: string) => string | null
+  launchSftp: (hostId: string, viaPaneId?: string) => string | null
+  connectSftp: (id: string) => Promise<void>
   spawnPane: (id: string, cols: number, rows: number) => Promise<void>
   restart: (id: string) => Promise<void>
   startPane: (id: string) => Promise<void>
@@ -110,7 +126,8 @@ export function capturePanes(): { panes: SavedPane[]; activePane: number | null 
       ...(pane.resumeSessionId ? { resumeSessionId: pane.resumeSessionId } : {}),
       ...(pane.startupCommand ? { startupCommand: pane.startupCommand } : {}),
       ...(pane.commandKind ? { commandKind: pane.commandKind } : {}),
-      ...(pane.sshHostId ? { sshHostId: pane.sshHostId } : {})
+      ...(pane.sshHostId ? { sshHostId: pane.sshHostId } : {}),
+      ...(pane.sftpHostId ? { sftpHostId: pane.sftpHostId } : {})
     })),
     activePane: activeIndex === -1 ? null : activeIndex
   }
@@ -128,6 +145,24 @@ export function nextPaneTitle(base: string, existingTitles: readonly string[]): 
     const candidate = index === 1 ? base : `${base} ${index}`
     if (!used.has(candidate)) return candidate
   }
+}
+
+function waitUntilSettled(id: string): Promise<void> {
+  return new Promise((resolve) => {
+    const settled = (): boolean => {
+      const pane = useTerminalStore.getState().panes.find((candidate) => candidate.id === id)
+      return !pane || (pane.status !== 'starting' && pane.status !== 'idle')
+    }
+    if (settled()) {
+      resolve()
+      return
+    }
+    const unsubscribe = useTerminalStore.subscribe(() => {
+      if (!settled()) return
+      unsubscribe()
+      resolve()
+    })
+  })
 }
 
 export const useTerminalStore = create<TerminalState>((set, get) => {
@@ -288,6 +323,74 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
       return id
     },
 
+    launchSftp: (hostId, viaPaneId) => {
+      const view = findHostView(hostId)
+      if (!view) {
+        useUiStore.getState().pushToast('error', strings.ssh.hostGone)
+        return null
+      }
+      const id = crypto.randomUUID()
+      const title = nextPaneTitle(
+        shortenTitle(strings.sftp.paneTitle(view.host.name)),
+        get().panes.map((pane) => pane.title)
+      )
+      const pane: Pane = {
+        id,
+        seq: nextSeq++,
+        fontSize: usePrefsStore.getState().defaultFontSize,
+        title,
+        shellId: SSH_SHELL_ID,
+        shellLabel: strings.sftp.badge,
+        cwd: SSH_PANE_CWD,
+        sftpHostId: hostId,
+        ...(viaPaneId ? { sftpViaId: viaPaneId } : {}),
+        status: view.host.environment === 'prod' ? 'idle' : 'starting'
+      }
+      set((state) => {
+        const after = viaPaneId ? state.panes.findIndex((item) => item.id === viaPaneId) : -1
+        const panes =
+          after === -1
+            ? [...state.panes, pane]
+            : [...state.panes.slice(0, after + 1), pane, ...state.panes.slice(after + 1)]
+        return { panes, activePaneId: id }
+      })
+      if (pane.status === 'starting') void get().connectSftp(id)
+      return id
+    },
+
+    connectSftp: async (id) => {
+      const pane = findPane(id)
+      if (!pane?.sftpHostId) return
+      updatePane(id, { status: 'starting', sshFailure: undefined, exitReason: undefined })
+      if (pane.sftpViaId) await waitUntilSettled(pane.sftpViaId)
+      if (findPane(id)?.status !== 'starting') return
+      const via = get().panes.find(
+        (candidate) =>
+          candidate.sshHostId === pane.sftpHostId &&
+          candidate.status === 'running' &&
+          (pane.sftpViaId === undefined || candidate.id === pane.sftpViaId)
+      ) ?? get().panes.find((candidate) => candidate.sshHostId === pane.sftpHostId && candidate.status === 'running')
+      const result: SftpOpenResult = await window.agentgrid.sftp
+        .open({ id, hostId: pane.sftpHostId, ...(via ? { viaId: via.id } : {}) })
+        .catch((error: unknown) => ({
+          ok: false as const,
+          failure: { code: 'other' as const, message: error instanceof Error ? error.message : String(error) }
+        }))
+      useSshStore.getState().resolveRequest(id)
+      const current = findPane(id)
+      if (!current) {
+        if (result.ok) window.agentgrid.sftp.close(id)
+        return
+      }
+      if (current.status !== 'starting') return
+      if (result.ok) {
+        updatePane(id, { status: 'running' })
+        await initSftpPane(id, result.home)
+      } else {
+        updatePane(id, { status: 'error', sshFailure: result.failure })
+      }
+    },
+
     spawnPane: async (id, cols, rows) => {
       const pane = findPane(id)
       const managed = terminalRegistry.get(id)
@@ -358,6 +461,13 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
     },
 
     restart: async (id) => {
+      const sftpPane = findPane(id)
+      if (sftpPane?.sftpHostId) {
+        if (sftpPane.status === 'running' || sftpPane.status === 'starting') window.agentgrid.sftp.close(id)
+        updatePane(id, { status: 'starting', exitCode: undefined })
+        await get().connectSftp(id)
+        return
+      }
       const managed = terminalRegistry.get(id)
       if (!managed || !findPane(id)) return
       if (findPane(id)?.status === 'idle') {
@@ -381,6 +491,10 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
 
     startPane: async (id) => {
       const pane = findPane(id)
+      if (pane?.sftpHostId) {
+        if (pane.status === 'idle') await get().connectSftp(id)
+        return
+      }
       const managed = terminalRegistry.get(id)
       if (!pane || !managed || pane.status !== 'idle') return
       updatePane(id, { status: 'starting' })
@@ -403,10 +517,12 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
       }
       const restored: Pane[] = saved.map((entry) => {
         const id = crypto.randomUUID()
-        const managed = terminalRegistry.create(id, entry.sshHostId ? 0 : windowsBuild)
-        managed.onZoom = (step) => {
-          if (step === 'reset') get().resetFontSize(id)
-          else get().adjustFontSize(id, step)
+        if (!entry.sftpHostId) {
+          const managed = terminalRegistry.create(id, entry.sshHostId ? 0 : windowsBuild)
+          managed.onZoom = (step) => {
+            if (step === 'reset') get().resetFontSize(id)
+            else get().adjustFontSize(id, step)
+          }
         }
         return {
           id,
@@ -421,6 +537,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
           startupCommand: entry.startupCommand,
           commandKind: entry.commandKind,
           sshHostId: entry.sshHostId,
+          sftpHostId: entry.sftpHostId,
           status: 'idle'
         }
       })
@@ -444,6 +561,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => {
       window.agentgrid.terminal.kill(id)
       terminalRegistry.remove(id)
       useSshStore.getState().forget(id)
+      useSftpStore.getState().forget(id)
       const remaining = panes.filter((pane) => pane.id !== id)
       const nextActive =
         activePaneId === id ? (remaining[Math.min(index, remaining.length - 1)]?.id ?? null) : activePaneId

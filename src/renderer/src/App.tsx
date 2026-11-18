@@ -13,6 +13,7 @@ import { useGlobalShortcuts } from './hooks/use-global-shortcuts'
 import { useLaunchRequests } from './hooks/use-launch-requests'
 import { useCollapseSidebarWhenNarrow } from './hooks/use-narrow-window'
 import { useHostsStore } from './state/hosts-store'
+import { startSftpEvents, stopSftpEvents } from './state/sftp-actions'
 import { startSshEvents, stopSshEvents } from './state/ssh-store'
 import { useTerminalStore } from './state/terminal-store'
 import { terminalRegistry } from './terminal/registry'
@@ -25,10 +26,12 @@ export function App() {
   useEffect(() => {
     terminalRegistry.init(useTerminalStore.getState().handleExit)
     startSshEvents()
+    startSftpEvents()
     void useHostsStore.getState().load()
     return () => {
       terminalRegistry.dispose()
       stopSshEvents()
+      stopSftpEvents()
     }
   }, [])
 

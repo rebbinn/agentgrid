@@ -42,6 +42,20 @@ import {
   SshTestRequestSchema,
   type SshResult
 } from '@shared/ssh'
+import {
+  LocalListRequestSchema,
+  LocalPathRequestSchema,
+  SftpCloseSchema,
+  SftpOpenRequestSchema,
+  SftpRequestSchema,
+  TransferCancelSchema,
+  TransferRequestSchema,
+  type LocalListResult,
+  type LocalPickResult,
+  type LocalPlaces,
+  type SftpOpenResult,
+  type SftpReply
+} from '@shared/sftp'
 import type { HostsService } from './hosts-service'
 import { isOpenableExternalUrl, isTrustedSender, type TrustedEntry } from './security'
 import type { ShellDefinition } from './shells'
@@ -52,6 +66,12 @@ export interface IpcServices {
   terminals: TerminalService
   hosts: HostsService
   ssh: SshService
+  local: {
+    list(path: string): Promise<LocalListResult>
+    places(): LocalPlaces
+    pickFiles(): Promise<LocalPickResult>
+    reveal(path: string): void
+  }
   getShells(): Promise<ShellDefinition[]>
   listSessions(): Promise<ClaudeSession[]>
   agentStatus(): AgentStatus
@@ -250,6 +270,61 @@ export function registerIpc(
     if (!isTrusted(event)) return
     const parsed = SshCancelSchema.safeParse(payload)
     if (parsed.success) services.ssh.cancel(parsed.data.sessionId)
+  })
+
+  ipcMain.handle(IpcChannel.sftpOpen, async (event, payload: unknown): Promise<SftpOpenResult> => {
+    guard(event)
+    const parsed = SftpOpenRequestSchema.safeParse(payload)
+    if (!parsed.success) throw new Error('Invalid SFTP open request')
+    return services.ssh.openSftp(parsed.data)
+  })
+
+  ipcMain.handle(IpcChannel.sftpRequest, async (event, payload: unknown): Promise<SftpReply> => {
+    guard(event)
+    const parsed = SftpRequestSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false, error: { code: 'failure', message: 'invalid request' } }
+    return services.ssh.sftpRequest(parsed.data)
+  })
+
+  ipcMain.on(IpcChannel.sftpTransfer, (event, payload: unknown) => {
+    if (!isTrusted(event)) return
+    const parsed = TransferRequestSchema.safeParse(payload)
+    if (parsed.success) services.ssh.transfer(parsed.data)
+  })
+
+  ipcMain.on(IpcChannel.sftpCancelTransfer, (event, payload: unknown) => {
+    if (!isTrusted(event)) return
+    const parsed = TransferCancelSchema.safeParse(payload)
+    if (parsed.success) services.ssh.cancelTransfer(parsed.data.sessionId, parsed.data.transferId)
+  })
+
+  ipcMain.on(IpcChannel.sftpClose, (event, payload: unknown) => {
+    if (!isTrusted(event)) return
+    const parsed = SftpCloseSchema.safeParse(payload)
+    if (parsed.success) services.ssh.closeSftp(parsed.data.sessionId)
+  })
+
+  ipcMain.handle(IpcChannel.localList, async (event, payload: unknown): Promise<LocalListResult> => {
+    guard(event)
+    const parsed = LocalListRequestSchema.safeParse(payload)
+    if (!parsed.success) return { ok: false, error: { code: 'not-found', message: '' } }
+    return services.local.list(parsed.data.path)
+  })
+
+  ipcMain.handle(IpcChannel.localPlaces, (event): LocalPlaces => {
+    guard(event)
+    return services.local.places()
+  })
+
+  ipcMain.handle(IpcChannel.localPickFiles, async (event): Promise<LocalPickResult> => {
+    guard(event)
+    return services.local.pickFiles()
+  })
+
+  ipcMain.handle(IpcChannel.localReveal, (event, payload: unknown): void => {
+    guard(event)
+    const parsed = LocalPathRequestSchema.safeParse(payload)
+    if (parsed.success) services.local.reveal(parsed.data.path)
   })
 
   ipcMain.handle(IpcChannel.externalOpen, async (event, payload: unknown): Promise<boolean> => {

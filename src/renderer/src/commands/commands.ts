@@ -301,6 +301,17 @@ export function buildCommands(context: CommandContext): Command[] {
         useTerminalStore.getState().launchSsh(host.id)
       }
     })
+    add({
+      id: `sftp.${host.id}`,
+      title: strings.commands.openSftp(host.name, host.group),
+      group: group.servers,
+      keywords: `sftp fayl file ${endpointLabel(host)}`,
+      run: () => {
+        const store = useTerminalStore.getState()
+        const running = store.panes.find((pane) => pane.sshHostId === host.id && pane.status === 'running')
+        store.launchSftp(host.id, running?.id)
+      }
+    })
   }
 
   add({

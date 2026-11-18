@@ -65,6 +65,23 @@ export function createAgentGridMock() {
       answer: vi.fn<AgentGridApi['ssh']['answer']>(),
       cancel: vi.fn<AgentGridApi['ssh']['cancel']>(),
       onEvent: vi.fn<AgentGridApi['ssh']['onEvent']>(() => () => undefined)
+    },
+    sftp: {
+      open: vi.fn<AgentGridApi['sftp']['open']>().mockResolvedValue({ ok: true, home: '/home/me' }),
+      request: vi.fn<AgentGridApi['sftp']['request']>().mockResolvedValue({ ok: true, path: '/home/me', entries: [] }),
+      transfer: vi.fn<AgentGridApi['sftp']['transfer']>(),
+      cancelTransfer: vi.fn<AgentGridApi['sftp']['cancelTransfer']>(),
+      close: vi.fn<AgentGridApi['sftp']['close']>(),
+      onEvent: vi.fn<AgentGridApi['sftp']['onEvent']>(() => () => undefined)
+    },
+    local: {
+      list: vi.fn<AgentGridApi['local']['list']>().mockResolvedValue({ ok: true, path: 'C:\\Users\\me\\Downloads', entries: [] }),
+      places: vi
+        .fn<AgentGridApi['local']['places']>()
+        .mockResolvedValue({ home: 'C:\\Users\\me', downloads: 'C:\\Users\\me\\Downloads', drives: ['C:\\'] }),
+      pickFiles: vi.fn<AgentGridApi['local']['pickFiles']>().mockResolvedValue({ paths: [] }),
+      reveal: vi.fn<AgentGridApi['local']['reveal']>().mockResolvedValue(undefined),
+      pathForFile: vi.fn<AgentGridApi['local']['pathForFile']>(() => '')
     }
   } satisfies AgentGridApi
 }

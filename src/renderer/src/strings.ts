@@ -164,7 +164,8 @@ export const strings = {
     newServer: 'Yeni server…',
     toggleServers: 'Serverlər tabını aç / bağla',
     connectServer: (name: string, group: string) =>
-      group ? `Serverə qoşul: ${name} (${group})` : `Serverə qoşul: ${name}`
+      group ? `Serverə qoşul: ${name} (${group})` : `Serverə qoşul: ${name}`,
+    openSftp: (name: string, group: string) => (group ? `SFTP: ${name} (${group})` : `SFTP: ${name}`)
   },
   send: {
     title: 'Komandanı terminala göndər',
@@ -556,6 +557,89 @@ export const strings = {
         case 'other':
           return message ? `Xəta: ${message}` : 'Naməlum xəta.'
       }
+    }
+  },
+  sftp: {
+    badge: 'SFTP',
+    paneTitle: (name: string) => `SFTP · ${name}`,
+    open: 'SFTP aç',
+    openFor: (name: string) => `${name}: SFTP`,
+    openSideBySide: 'Terminal + SFTP yan-yana',
+    openFromPane: 'Bu serverin faylları (SFTP)',
+    local: 'Bu kompüter',
+    remote: 'Server',
+    up: 'Yuxarı qovluq',
+    refresh: 'Yenilə',
+    showHidden: 'Gizli faylları göstər',
+    pathLabel: (side: string) => `${side}: qovluq yolu`,
+    newFolder: 'Yeni qovluq',
+    upload: 'Yüklə',
+    uploadPick: 'Faylları seçib yüklə…',
+    download: 'Endir',
+    rename: 'Adını dəyiş…',
+    permissions: 'İcazələr…',
+    copyPath: 'Yolu kopyala',
+    reveal: 'Explorer-də göstər',
+    remove: 'Sil…',
+    columns: { name: 'Ad', size: 'Ölçü', modified: 'Dəyişib', mode: 'İcazələr' },
+    listLabel: (side: string) => `${side}: fayllar`,
+    empty: 'Qovluq boşdur.',
+    loading: 'Yüklənir…',
+    dropHint: 'Faylları Explorer-dən bura atın və ya o biri tərəfdən sürükləyin.',
+    selection: (count: number) => `${count} seçilib`,
+    items: (count: number) => `${count} element`,
+    connecting: 'SFTP qoşulur…',
+    savedTitle: 'SFTP paneli',
+    savedText: (name: string) => `${name} · SFTP. Bağlantı yoxdur.`,
+    closedBar: 'SFTP bağlantısı bağlandı',
+    lostBar: 'SFTP bağlantısı qopdu',
+    pathCopied: 'Yol kopyalandı',
+    errors: {
+      'not-found': 'Belə fayl və ya qovluq yoxdur.',
+      permission: 'İcazə yoxdur.',
+      exists: 'Bu adda fayl artıq var.',
+      'not-empty': 'Qovluq boş deyil.',
+      connection: 'Bağlantı yoxdur.',
+      failure: 'Əməliyyat alınmadı.',
+      cancelled: 'Ləğv edildi.'
+    },
+    dialogs: {
+      newFolderTitle: 'Yeni qovluq',
+      renameTitle: 'Adını dəyiş',
+      nameLabel: 'Ad',
+      nameInvalid: 'Ad boş ola bilməz, / işarəsi olmaz.',
+      chmodTitle: 'İcazələr',
+      chmodLabel: 'Səkkizlik say (məs. 644 və ya 755)',
+      chmodInvalid: 'Üç və ya dörd rəqəm yazın (0–7).',
+      save: 'Saxla',
+      create: 'Yarat',
+      cancel: 'Ləğv et',
+      deleteTitle: 'Silinsin?',
+      deleteText: (names: string, folders: number) =>
+        folders > 0
+          ? `${names} serverdən silinəcək. Qovluqların içindəki hər şey də silinəcək. Bu geri qaytarılmır.`
+          : `${names} serverdən silinəcək. Bu geri qaytarılmır.`,
+      delete: 'Sil',
+      overwriteTitle: 'Fayllar artıq var',
+      overwriteText: (count: number, names: string) =>
+        `${count} fayl hədəfdə artıq var (${names}). Üzərinə yazılsın?`,
+      overwrite: 'Üzərinə yaz',
+      skip: 'Olanları ötür'
+    },
+    transfers: {
+      label: 'Köçürmələr',
+      upload: 'Yükləmə',
+      download: 'Endirmə',
+      cancel: (name: string) => `${name} köçürməsini ləğv et`,
+      clear: 'Bitənləri təmizlə',
+      done: 'Hazırdır',
+      cancelled: 'Ləğv edildi',
+      failed: (message: string) => `Alınmadı: ${message}`,
+      files: (done: number, total: number) => `${done}/${total} fayl`,
+      speed: (text: string) => `${text}/s`,
+      left: (text: string) => `qalıb ${text}`,
+      waiting: 'Başlayır…',
+      status: (count: number) => `${count} köçürmə`
     }
   },
   confirmClose: {

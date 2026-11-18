@@ -34,7 +34,9 @@ func (s *session) keepAlive(client *ssh.Client, stop <-chan struct{}) {
 		roundTrip, outcome := ping(client, keepaliveTimeout, stop)
 		switch outcome {
 		case pingReplied:
-			s.emit(latencyEvent{Ev: "latency", Sid: s.id.raw, Ms: roundTrip.Milliseconds()})
+			if s.mode == modeShell {
+				s.emit(latencyEvent{Ev: "latency", Sid: s.id.raw, Ms: roundTrip.Milliseconds()})
+			}
 		case pingTimedOut:
 			s.keepaliveLost.Store(true)
 			client.Close()

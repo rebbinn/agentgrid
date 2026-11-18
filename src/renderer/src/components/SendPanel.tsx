@@ -27,7 +27,7 @@ function SendPanelContent() {
   const [chosenId, setChosenId] = useState<string | null>(null)
   const [execute, setExecute] = useState(true)
 
-  const running = panes.filter((pane) => pane.status === 'running')
+  const running = panes.filter((pane) => pane.status === 'running' && pane.sftpHostId === undefined)
   const target =
     running.find((pane) => pane.id === chosenId) ??
     running.find((pane) => pane.id === activePaneId) ??

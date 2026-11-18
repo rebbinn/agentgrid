@@ -34,6 +34,14 @@ Claude düyməsinin işləməsi üçün Claude Code kompüterdə quraşdırılm�
 - Prod serverin terminalının çərçivəsi qırmızıdır və qoşulmazdan əvvəl təsdiq soruşulur. "Hamısını başlat" prod serverlərə heç vaxt qoşulmur.
 - Siyahını komanda yoldaşları ilə paylaşmaq olar: Serverlər tabında "⋯" düyməsinə basıb "İxrac et" seçirsiniz, alınan faylı onlar "İdxal et" ilə götürürlər. Parollar fayla düşmür.
 
+### SFTP
+
+- SFTP paneli 4 yerdən açılır: server sətrindəki qovluq düyməsi, sağ klik menyusu ("SFTP aç", "Terminal + SFTP yan-yana"), SSH terminalının başlığındakı "SFTP" düyməsi və Ctrl+K.
+- Həmin serverin terminalı açıqdırsa, SFTP onun bağlantısından istifadə edir. Parolu ikinci dəfə yazmırsınız.
+- Solda bu kompüter, sağda server görünür. Faylı və ya qovluğu o biri tərəfə sürükləmək, Explorer-dən atmaq, "Yüklə" və "Endir" düymələri, iki dəfə klik ilə köçürmək olar.
+- Köçürmə növbəsində sürət və qalan vaxt görünür, köçürməni ləğv etmək olur. Fayl tam köçməyincə öz adını almır, ona görə yarımçıq fayl qalmır.
+- Serverdə yeni qovluq yaratmaq (+), ad dəyişmək (F2), silmək (Del, təsdiqlə) və icazələri dəyişmək olur.
+
 SSH işini ayrıca kiçik proqram, `agentgrid-ssh.exe` görür. O, Go dilində yazılıb (`native/ssh-helper`) və yalnız ilk qoşulmada işə düşür.
 
 Proqram bağlananda terminal prosesləri dayanır. Yenidən açanda terminallar "Gözləyir" vəziyyətində gəlir və özbaşına başlamır.
